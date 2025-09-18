@@ -1,0 +1,11 @@
+<RevitAddIns>
+	<AddIn Type="Application">
+		<Name>DEAXO Auto Elevation</Name>
+		<Assembly>Deaxo.AutoElevation.dll</Assembly>
+		<AddInId>6B736D4B-42A2-4A19-A7C7-EE19A5A8E9F4</AddInId>
+		<FullClassName>Deaxo.AutoElevation.App</FullClassName>
+		<VendorId>DEAXO</VendorId>
+		<VendorDescription>DEAXO GmbH</VendorDescription>
+		<Text>DEAXO Auto Elevation</Text>
+	</AddIn>
+</RevitAddIns>
