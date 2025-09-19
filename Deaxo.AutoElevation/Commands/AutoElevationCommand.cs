@@ -89,7 +89,7 @@ namespace Deaxo.AutoElevation.Commands
                 View chosenTemplate = null;
                 if (viewTemplates.Count > 0)
                 {
-                    var templateWindow = new SelectFromDictWindow(viewTemplates.Select(v => v.Name).ToList(), "Select ViewTemplate for Sections", allowMultiple: false);
+                    var templateWindow = new SelectFromDictWindow(viewTemplates.Select(v => v.Name).ToList(), "Select ViewTemplate for Elevations", allowMultiple: false);
                     bool? tr = templateWindow.ShowDialog();
                     if (tr == true && templateWindow.SelectedItems.Count > 0)
                     {
@@ -98,7 +98,7 @@ namespace Deaxo.AutoElevation.Commands
                     }
                 }
 
-                // 5) Transaction: create sections and sheets
+                // 5) Transaction: create elevations only and place on sheets
                 var results = new List<string>();
                 using (Transaction t = new Transaction(doc, "DEAXO - Create Elevations"))
                 {
@@ -113,8 +113,8 @@ namespace Deaxo.AutoElevation.Commands
 
                             if (!props.IsValid) continue;
 
-                            // create sections (elevation, cross, plan)
-                            var created = SectionGenerator.CreateSections(doc, props);
+                            // create elevation only (no cross-section, no plan)
+                            var created = SectionGenerator.CreateElevationOnly(doc, props);
                             if (created == null || created.elevation == null) continue;
 
                             var elev = created.elevation;
@@ -140,17 +140,10 @@ namespace Deaxo.AutoElevation.Commands
                             if (defaultTitleblockTypeId != null && defaultTitleblockTypeId != ElementId.InvalidElementId)
                             {
                                 var vs = ViewSheet.Create(doc, defaultTitleblockTypeId);
-                                // Position copy of your positions from python example
-                                var positions = new List<XYZ>()
-                                {
-                                    new XYZ(-0.85,0.65,0),
-                                    new XYZ(-0.5,0.65,0),
-                                    new XYZ(-0.85,0.35,0)
-                                };
-                                XYZ pos = positions[0];
+                                // Position for elevation view
+                                XYZ pos = new XYZ(0.5, 0.5, 0); // Center position
                                 try
                                 {
-                                    pos = positions[0];
                                     if (Viewport.CanAddViewToSheet(doc, vs.Id, elev.Id))
                                         Viewport.Create(doc, vs.Id, elev.Id, pos);
                                 }
@@ -174,7 +167,7 @@ namespace Deaxo.AutoElevation.Commands
                                     }
                                 }
 
-                                results.Add($"{el.Id} -> Sheet:{vs.Id} Elev:{elev.Id}");
+                                results.Add($"{el.Id} -> Sheet:{vs.Id} Elevation:{elev.Id}");
                             }
                         }
                         catch (Exception exInner)
