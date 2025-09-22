@@ -21,7 +21,7 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                // 1) Category choices (mirror your python mapping)
+                // 1) Category choices (mirror your python mapping) - ALL SELECTED BY DEFAULT
                 var selectOpts = new Dictionary<string, object>()
                 {
                     {"Walls"                 , BuiltInCategory.OST_Walls},
@@ -42,27 +42,18 @@ namespace Deaxo.AutoElevation.Commands
                         new BuiltInCategory[] {BuiltInCategory.OST_ElectricalFixtures, BuiltInCategory.OST_ElectricalEquipment }}
                 };
 
-                // 2) UI: select categories (SelectFromDictWindow)
-                var selectWindow = new SelectFromDictWindow(selectOpts.Keys.ToList(), "DEAXO - Select Categories", allowMultiple: true);
-                bool? res = selectWindow.ShowDialog();
-                if (res != true || selectWindow.SelectedItems.Count == 0)
-                {
-                    TaskDialog.Show("DEAXO", "No Category was selected. Cancelled.");
-                    return Result.Cancelled;
-                }
-
-                // convert selected keys to list of allowed types/categories
+                // Skip the category selection - use all categories by default
                 var allowedTypesOrCats = new List<object>();
-                foreach (var key in selectWindow.SelectedItems)
+                foreach (var kvp in selectOpts)
                 {
-                    var val = selectOpts[key];
+                    var val = kvp.Value;
                     if (val is BuiltInCategory bic) allowedTypesOrCats.Add(bic);
                     else if (val is BuiltInCategory[] bicArr)
                         allowedTypesOrCats.AddRange(bicArr.Cast<object>());
                     else allowedTypesOrCats.Add(val);
                 }
 
-                // 3) Selection: prompt user to select elements with filter
+                // 2) Selection: prompt user to select elements with filter
                 var selFilter = new DXSelectionFilter(allowedTypesOrCats);
                 IList<Reference> refs = null;
                 try
@@ -81,24 +72,30 @@ namespace Deaxo.AutoElevation.Commands
                     return Result.Cancelled;
                 }
 
-                // 4) Get view templates for optional selection
+                // 3) Get view templates for optional selection with corrected title
                 var allViews = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().ToList();
                 var viewTemplates = allViews.Where(v => v.IsTemplate).ToList();
 
-                // ask template (single-select)
+                // ask template (single-select) with corrected title
                 View chosenTemplate = null;
                 if (viewTemplates.Count > 0)
                 {
-                    var templateWindow = new SelectFromDictWindow(viewTemplates.Select(v => v.Name).ToList(), "Select ViewTemplate for Elevations", allowMultiple: false);
+                    var templateNames = viewTemplates.Select(v => v.Name).ToList();
+                    templateNames.Insert(0, "None"); // Add "None" option
+
+                    var templateWindow = new SelectFromDictWindow(templateNames, "Select ViewTemplate for Elevations", allowMultiple: false);
                     bool? tr = templateWindow.ShowDialog();
                     if (tr == true && templateWindow.SelectedItems.Count > 0)
                     {
                         var name = templateWindow.SelectedItems[0];
-                        chosenTemplate = viewTemplates.FirstOrDefault(v => v.Name == name);
+                        if (name != "None")
+                        {
+                            chosenTemplate = viewTemplates.FirstOrDefault(v => v.Name == name);
+                        }
                     }
                 }
 
-                // 5) Transaction: create elevations only and place on sheets
+                // 4) Transaction: create elevations only and place on sheets
                 var results = new List<string>();
                 using (Transaction t = new Transaction(doc, "DEAXO - Create Elevations"))
                 {
