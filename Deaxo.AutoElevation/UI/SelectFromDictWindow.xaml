@@ -84,8 +84,8 @@
 
             <!-- Instructions + Select All / Deselect All -->
             <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                <TextBlock Text="Select the categories you want to generate elevations for:" 
-                           FontSize="16" FontWeight="SemiBold" Foreground="#444" Margin="0,0,0,10"/>
+                <TextBlock 
+                           FontSize="16" FontWeight="SemiBold" Foreground="#444" Margin="0,0,0,10"><Run Text="Select the "/><Run Language="en-gb" Text="Template/View"/><Run Text=" you want to "/><Run Language="en-gb" Text="place"/><Run Text=" elevations "/><Run Language="en-gb" Text="on"/><Run Text=":"/></TextBlock>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,5">
                     <Button Content="Select All" Width="100" Height="30" Margin="0,0,10,0"
