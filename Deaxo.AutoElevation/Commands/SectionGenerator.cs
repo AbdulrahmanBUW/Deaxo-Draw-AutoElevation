@@ -24,7 +24,7 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                var boxElev = CreateSectionBox(props, "elevation");
+                var boxElev = CreateSectionBox(doc, props, "elevation");
                 var elev = CreateViewSection(doc, boxElev);
                 if (elev == null) return null;
 
@@ -43,8 +43,8 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                // Try internal mode first
-                var boxElev = CreateSectionBox(props, "internal");
+                // Internal side elevation
+                var boxElev = CreateSectionBox(doc, props, "internal");
                 var elev = CreateViewSection(doc, boxElev);
                 if (elev == null) return null;
 
@@ -53,10 +53,10 @@ namespace Deaxo.AutoElevation.Commands
             }
             catch
             {
-                // Fallback to standard elevation if internal fails
+                // fallback to standard
                 try
                 {
-                    var boxElev = CreateSectionBox(props, "elevation");
+                    var boxElev = CreateSectionBox(doc, props, "elevation");
                     var elev = CreateViewSection(doc, boxElev);
                     if (elev == null) return null;
 
@@ -93,16 +93,10 @@ namespace Deaxo.AutoElevation.Commands
                         if (elevation != null)
                             elevations[direction] = elevation;
                     }
-                    catch
-                    {
-                        // Continue with other elevations
-                    }
+                    catch { }
                 }
             }
-            catch
-            {
-                // Return whatever we managed to create
-            }
+            catch { }
 
             return elevations;
         }
@@ -191,91 +185,62 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
-        private static BoundingBoxXYZ CreateSectionBox(ElementProperties props, string mode)
+        private static BoundingBoxXYZ CreateSectionBox(Document doc, ElementProperties props, string mode)
         {
             var sectionBox = new BoundingBoxXYZ();
-            var transform = CreateTransform(props.Origin, props.Vector, mode);
+            var transform = CreateTransform(doc, props, mode);
 
             double W_half = Math.Max(props.Width / 2.0, 0.5);
             double H_half = Math.Max(props.Height / 2.0, 1.0);
             double D_half = Math.Max(props.Depth / 2.0, 0.5);
-            double offset = 1.0; // Fixed offset instead of extension method
+            double offset = 1.0;
 
-            if (mode == "internal")
-            {
-                // For internal elevations: section extends from interior space through wall
-                sectionBox.Min = new XYZ(-W_half - offset, -H_half - offset, -D_half - offset);
-                sectionBox.Max = new XYZ(W_half + offset, H_half + offset, D_half + offset);
-            }
-            else
-            {
-                // Standard elevation
-                sectionBox.Min = new XYZ(-W_half - offset, -H_half - offset, 0);
-                sectionBox.Max = new XYZ(W_half + offset, H_half + offset, D_half + offset);
-            }
-
+            // Section aligned parallel to wall interior
+            sectionBox.Min = new XYZ(-W_half - offset, -H_half - offset, 0);
+            sectionBox.Max = new XYZ(W_half + offset, H_half + offset, D_half + offset);
             sectionBox.Transform = transform;
+
             return sectionBox;
         }
 
-        private static Transform CreateTransform(XYZ origin, XYZ vector, string mode)
+        private static Transform CreateTransform(Document doc, ElementProperties props, string mode)
         {
             var transform = Transform.Identity;
 
-            // Validate and normalize vector
-            XYZ normalizedVector;
-            try
+            if (props.Element is Wall wall)
             {
-                if (vector.GetLength() < 0.001)
-                    normalizedVector = XYZ.BasisX;
-                else
-                    normalizedVector = vector.Normalize();
-            }
-            catch
-            {
-                normalizedVector = XYZ.BasisX;
-            }
+                LocationCurve locCurve = wall.Location as LocationCurve;
+                XYZ wallDir = (locCurve.Curve.GetEndPoint(1) - locCurve.Curve.GetEndPoint(0)).Normalize();
+                XYZ extNormal = wall.Orientation;
+                if (wall.Flipped) extNormal = -extNormal;
+                XYZ intNormal = -extNormal;
+                XYZ viewNormal = (mode == "internal") ? intNormal : extNormal;
 
-            // Calculate perpendicular direction
-            XYZ perpendicular;
-            if (Math.Abs(normalizedVector.X) > Math.Abs(normalizedVector.Y))
-            {
-                perpendicular = new XYZ(-normalizedVector.Y, normalizedVector.X, 0);
+                // Ensure orthogonal axes
+                XYZ basisZ = viewNormal.Normalize();
+                XYZ basisX = wallDir.Normalize();
+                XYZ basisY = basisZ.CrossProduct(basisX).Normalize();
+
+                transform.BasisX = basisX;
+                transform.BasisY = basisY;
+                transform.BasisZ = basisZ;
+
+                double halfThickness = Math.Max(wall.Width / 2.0, 0.1);
+                transform.Origin = props.Origin + ((mode == "internal") ? intNormal * halfThickness : extNormal * halfThickness);
             }
             else
             {
-                perpendicular = new XYZ(normalizedVector.Y, -normalizedVector.X, 0);
-            }
-
-            try
-            {
-                perpendicular = perpendicular.Normalize();
-            }
-            catch
-            {
-                perpendicular = XYZ.BasisY;
-            }
-
-            if (mode == "internal")
-            {
-                // Position at interior side, looking toward wall
-                double wallThickness = 2.0; // Assume 2 feet for positioning
-                transform.Origin = origin + perpendicular * wallThickness;
-                transform.BasisX = normalizedVector;
-                transform.BasisY = XYZ.BasisZ;
-                transform.BasisZ = -perpendicular; // Look toward wall
-            }
-            else
-            {
-                // Standard external elevation
-                transform.Origin = origin;
-                transform.BasisX = normalizedVector;
-                transform.BasisY = XYZ.BasisZ;
-                transform.BasisZ = perpendicular;
+                XYZ forward = props.Vector.Normalize();
+                XYZ perp = new XYZ(-forward.Y, forward.X, 0).Normalize();
+                transform.BasisX = forward;
+                transform.BasisZ = perp;
+                transform.BasisY = transform.BasisZ.CrossProduct(transform.BasisX).Normalize();
+                transform.Origin = props.Origin;
             }
 
             return transform;
         }
+
 
         private static void RenameViewSafe(View view, string newName)
         {
@@ -305,9 +270,6 @@ namespace Deaxo.AutoElevation.Commands
 
     public static class ElementPropertiesExtensions
     {
-        public static double offset(this ElementProperties props)
-        {
-            return 1.0;
-        }
+        public static double offset(this ElementProperties props) => 1.0;
     }
 }
