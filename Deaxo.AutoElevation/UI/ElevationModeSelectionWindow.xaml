@@ -1,0 +1,261 @@
+<Window x:Class="Deaxo.AutoElevation.UI.ElevationModeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Auto Elevation Mode Selection - DEAXO GmbH"
+        Height="600" Width="800"
+        WindowStartupLocation="CenterScreen"
+        Background="White"
+        FontFamily="Segoe UI"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <!-- Card Style -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="10"/>
+        </Style>
+
+        <!-- Button Style -->
+        <Style x:Key="SelectButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="20,10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.9"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,30" HorizontalAlignment="Center">
+            <TextBlock Text="Select Elevation Mode" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       Foreground="#333" 
+                       HorizontalAlignment="Center" 
+                       Margin="0,0,0,10"/>
+            <TextBlock Text="Choose the type of elevation views you want to create" 
+                       FontSize="16" 
+                       Foreground="#666" 
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Mode Cards -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Single Element Card -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Single Element" 
+                                   FontSize="20" 
+                                   FontWeight="Bold" 
+                                   Foreground="#007AFF" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,5"/>
+
+                        <TextBlock Text="Detail Elevation" 
+                                   FontSize="14" 
+                                   Foreground="#007AFF" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Creates individual elevation views for each selected element." 
+                                   FontSize="13" 
+                                   TextWrapping="Wrap" 
+                                   Foreground="#555" 
+                                   TextAlignment="Center"
+                                   Margin="0,0,0,15"/>
+
+                        <TextBlock Text="Best for:" 
+                                   FontSize="12" 
+                                   FontWeight="Bold" 
+                                   Foreground="#333" 
+                                   Margin="0,0,0,8"/>
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="- Walls" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Large furniture" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Major building elements" FontSize="12" Foreground="#666"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Row="1" 
+                            Content="Select This Mode" 
+                            Style="{StaticResource SelectButtonStyle}"
+                            Background="#007AFF"
+                            Click="SingleElement_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- Group Element Card -->
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Group Element" 
+                                   FontSize="20" 
+                                   FontWeight="Bold" 
+                                   Foreground="#FF6B35" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,5"/>
+
+                        <TextBlock Text="General Elevation" 
+                                   FontSize="14" 
+                                   Foreground="#FF6B35" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Creates four elevation views around all selected elements." 
+                                   FontSize="13" 
+                                   TextWrapping="Wrap" 
+                                   Foreground="#555" 
+                                   TextAlignment="Center"
+                                   Margin="0,0,0,15"/>
+
+                        <TextBlock Text="Best for:" 
+                                   FontSize="12" 
+                                   FontWeight="Bold" 
+                                   Foreground="#333" 
+                                   Margin="0,0,0,8"/>
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="- Pipe fittings and accessories" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Small MEP elements" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Multiple small items" FontSize="12" Foreground="#666"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Row="1" 
+                            Content="Select This Mode" 
+                            Style="{StaticResource SelectButtonStyle}"
+                            Background="#FF6B35"
+                            Click="GroupElement_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- Internal Elevation Card -->
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Internal" 
+                                   FontSize="20" 
+                                   FontWeight="Bold" 
+                                   Foreground="#34C759" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,5"/>
+
+                        <TextBlock Text="Elevation" 
+                                   FontSize="14" 
+                                   Foreground="#34C759" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Creates elevation views from inside walls and curtain walls." 
+                                   FontSize="13" 
+                                   TextWrapping="Wrap" 
+                                   Foreground="#555" 
+                                   TextAlignment="Center"
+                                   Margin="0,0,0,15"/>
+
+                        <TextBlock Text="Best for:" 
+                                   FontSize="12" 
+                                   FontWeight="Bold" 
+                                   Foreground="#333" 
+                                   Margin="0,0,0,8"/>
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="- Interior wall surfaces" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Curtain wall interiors" FontSize="12" Foreground="#666" Margin="0,0,0,3"/>
+                            <TextBlock Text="- Hosted elements view" FontSize="12" Foreground="#666"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Row="1" 
+                            Content="Select This Mode" 
+                            Style="{StaticResource SelectButtonStyle}"
+                            Background="#34C759"
+                            Click="InternalElevation_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Cancel Button -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Cancel" 
+                    Width="100" 
+                    Height="35"
+                    Background="#E0E0E0" 
+                    Foreground="#333"
+                    FontSize="14"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    Click="Cancel_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="15,8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#D0D0D0"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

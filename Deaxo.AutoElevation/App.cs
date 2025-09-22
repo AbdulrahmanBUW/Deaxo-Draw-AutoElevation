@@ -22,19 +22,19 @@ namespace Deaxo.AutoElevation
                 // Create Ribbon panel
                 RibbonPanel panel = application.CreateRibbonPanel(tabName, "Auto Elevation");
 
-                // PushButton data
+                // PushButton data - Keep the original command name for compatibility
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 PushButtonData buttonData = new PushButtonData(
                     "AutoElevation",
                     "Auto Elevation",
                     assemblyPath,
-                    "Deaxo.AutoElevation.Commands.AutoElevationCommand"
+                    "Deaxo.AutoElevation.Commands.AutoElevationCommand"  // Keep original class name
                 )
                 {
-                    ToolTip = "Automatically create elevations for selected elements",
+                    ToolTip = "Automatically create elevations for selected elements with multiple modes",
                 };
 
-                // Load large and small icons using GDI → WPF conversion
+                // Load large and small icons
                 buttonData.LargeImage = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon32.png");
                 buttonData.Image = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon16.png");
 
