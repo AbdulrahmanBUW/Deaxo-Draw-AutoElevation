@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.Revit.DB;
 
 namespace Deaxo.AutoElevation.Commands
@@ -75,112 +76,216 @@ namespace Deaxo.AutoElevation.Commands
             if (overallBB == null) return new Dictionary<string, ViewSection>();
 
             var elevations = new Dictionary<string, ViewSection>();
-            string[] directions = { "North", "South", "East", "West" };
 
             try
             {
                 XYZ center = (overallBB.Min + overallBB.Max) / 2;
-                double width = overallBB.Max.X - overallBB.Min.X;
-                double height = overallBB.Max.Z - overallBB.Min.Z;
-                double depth = overallBB.Max.Y - overallBB.Min.Y;
-                double padding = Math.Max(Math.Max(width, height), depth) * 0.3;
+                double width = Math.Abs(overallBB.Max.X - overallBB.Min.X);
+                double height = Math.Abs(overallBB.Max.Z - overallBB.Min.Z);
+                double depth = Math.Abs(overallBB.Max.Y - overallBB.Min.Y);
 
-                foreach (string direction in directions)
+                // Ensure minimum dimensions
+                width = Math.Max(width, 2.0);
+                height = Math.Max(height, 8.0);
+                depth = Math.Max(depth, 2.0);
+
+                double padding = Math.Max(Math.Max(width, height), depth) * 0.5;
+
+                System.Diagnostics.Debug.WriteLine($"Group elevation - Center: {center}, W: {width:F1}, H: {height:F1}, D: {depth:F1}, Padding: {padding:F1}");
+
+                // Create North elevation (looking South)
+                try
                 {
-                    try
-                    {
-                        var elevation = CreateDirectionalElevation(doc, center, width, height, depth, padding, direction, viewTemplate);
-                        if (elevation != null)
-                            elevations[direction] = elevation;
-                    }
-                    catch { }
+                    var northElev = CreateSimpleElevation(doc, center, width, height, depth, padding, "North", viewTemplate);
+                    if (northElev != null) elevations["North"] = northElev;
                 }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"North failed: {ex.Message}"); }
+
+                // Create South elevation (looking North)  
+                try
+                {
+                    var southElev = CreateSimpleElevation(doc, center, width, height, depth, padding, "South", viewTemplate);
+                    if (southElev != null) elevations["South"] = southElev;
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"South failed: {ex.Message}"); }
+
+                // Create East elevation (looking West)
+                try
+                {
+                    var eastElev = CreateSimpleElevation(doc, center, width, height, depth, padding, "East", viewTemplate);
+                    if (eastElev != null) elevations["East"] = eastElev;
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"East failed: {ex.Message}"); }
+
+                // Create West elevation (looking East)
+                try
+                {
+                    var westElev = CreateSimpleElevation(doc, center, width, height, depth, padding, "West", viewTemplate);
+                    if (westElev != null) elevations["West"] = westElev;
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"West failed: {ex.Message}"); }
+
+                System.Diagnostics.Debug.WriteLine($"Total elevations created: {elevations.Count}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in CreateGroupElevations: {ex.Message}");
+            }
 
             return elevations;
         }
 
-        private static ViewSection CreateDirectionalElevation(Document doc, XYZ center, double width, double height,
+        private static ViewSection CreateSimpleElevation(Document doc, XYZ center, double width, double height,
             double depth, double padding, string direction, View viewTemplate)
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"=== Creating {direction} elevation ===");
+
+                // Create a simple, robust section box
                 var sectionBox = new BoundingBoxXYZ();
-                var transform = CreateDirectionalTransform(center, width, height, depth, padding, direction);
 
-                double halfWidth = (direction == "North" || direction == "South") ? width / 2 + padding : depth / 2 + padding;
-                double halfHeight = height / 2 + padding;
-                double sectionDepth = (direction == "North" || direction == "South") ? depth + padding * 2 : width + padding * 2;
+                // Use generous, consistent dimensions for all directions
+                double boxWidth = Math.Max(width, depth) + padding * 2;
+                double boxHeight = height + padding * 2;
+                double boxDepth = Math.Max(width, depth) + padding * 2;
 
-                sectionBox.Min = new XYZ(-halfWidth, -halfHeight, 0);
-                sectionBox.Max = new XYZ(halfWidth, halfHeight, sectionDepth);
+                sectionBox.Min = new XYZ(-boxWidth / 2, -boxHeight / 2, 0);
+                sectionBox.Max = new XYZ(boxWidth / 2, boxHeight / 2, boxDepth);
+
+                // Create simple, reliable transforms
+                var transform = Transform.Identity;
+
+                switch (direction)
+                {
+                    case "North": // Looking south (towards negative Y)
+                        transform.BasisX = XYZ.BasisX;
+                        transform.BasisY = XYZ.BasisZ;
+                        transform.BasisZ = -XYZ.BasisY;
+                        transform.Origin = new XYZ(center.X, center.Y + depth / 2 + padding, center.Z);
+                        break;
+
+                    case "South": // Looking north (towards positive Y)
+                        transform.BasisX = -XYZ.BasisX;
+                        transform.BasisY = XYZ.BasisZ;
+                        transform.BasisZ = XYZ.BasisY;
+                        transform.Origin = new XYZ(center.X, center.Y - depth / 2 - padding, center.Z);
+                        break;
+
+                    case "East": // Looking west (towards negative X)
+                        transform.BasisX = XYZ.BasisY;
+                        transform.BasisY = XYZ.BasisZ;
+                        transform.BasisZ = -XYZ.BasisX;
+                        transform.Origin = new XYZ(center.X + width / 2 + padding, center.Y, center.Z);
+                        break;
+
+                    case "West": // Looking east (towards positive X)
+                        transform.BasisX = -XYZ.BasisY;
+                        transform.BasisY = XYZ.BasisZ;
+                        transform.BasisZ = XYZ.BasisX;
+                        transform.Origin = new XYZ(center.X - width / 2 - padding, center.Y, center.Z);
+                        break;
+                }
+
                 sectionBox.Transform = transform;
 
+                System.Diagnostics.Debug.WriteLine($"{direction}: Box size W={boxWidth:F1} H={boxHeight:F1} D={boxDepth:F1}");
+                System.Diagnostics.Debug.WriteLine($"{direction}: Origin {transform.Origin}");
+
+                // Create the view section
                 var elevation = CreateViewSection(doc, sectionBox);
-                if (elevation == null) return null;
+                if (elevation == null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"*** {direction} elevation creation FAILED ***");
+                    return null;
+                }
 
+                System.Diagnostics.Debug.WriteLine($"*** {direction} elevation creation SUCCEEDED: ID {elevation.Id} ***");
+
+                // Apply template
                 if (viewTemplate != null)
-                    elevation.ViewTemplateId = viewTemplate.Id;
+                {
+                    try
+                    {
+                        elevation.ViewTemplateId = viewTemplate.Id;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Template application failed for {direction}: {ex.Message}");
+                    }
+                }
 
-                RenameViewSafe(elevation, $"Group_Elevation_{direction}_{DateTime.Now:HHmmss}");
+                // Set name
+                string viewName = $"Group_Elevation_{direction}_{DateTime.Now.Ticks % 1000000}";
+                RenameViewSafe(elevation, viewName);
+
                 return elevation;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"*** Exception creating {direction} elevation: {ex.Message} ***");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }
 
-        private static Transform CreateDirectionalTransform(XYZ center, double width, double height, double depth,
-            double padding, string direction)
-        {
-            var transform = Transform.Identity;
-            transform.Origin = center;
 
-            switch (direction)
-            {
-                case "North": // Looking south
-                    transform.BasisX = XYZ.BasisX;
-                    transform.BasisY = XYZ.BasisZ;
-                    transform.BasisZ = -XYZ.BasisY;
-                    transform.Origin = center + new XYZ(0, depth / 2 + padding, 0);
-                    break;
-                case "South": // Looking north
-                    transform.BasisX = -XYZ.BasisX;
-                    transform.BasisY = XYZ.BasisZ;
-                    transform.BasisZ = XYZ.BasisY;
-                    transform.Origin = center + new XYZ(0, -depth / 2 - padding, 0);
-                    break;
-                case "East": // Looking west
-                    transform.BasisX = XYZ.BasisY;
-                    transform.BasisY = XYZ.BasisZ;
-                    transform.BasisZ = -XYZ.BasisX;
-                    transform.Origin = center + new XYZ(width / 2 + padding, 0, 0);
-                    break;
-                case "West": // Looking east
-                    transform.BasisX = -XYZ.BasisY;
-                    transform.BasisY = XYZ.BasisZ;
-                    transform.BasisZ = XYZ.BasisX;
-                    transform.Origin = center + new XYZ(-width / 2 - padding, 0, 0);
-                    break;
-            }
-
-            return transform;
-        }
 
         private static ViewSection CreateViewSection(Document doc, BoundingBoxXYZ sectionBox)
         {
             try
             {
-                ElementId sectionTypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.ViewTypeSection);
-                if (sectionTypeId == null || sectionTypeId == ElementId.InvalidElementId)
-                    return null;
+                System.Diagnostics.Debug.WriteLine("=== CreateViewSection called ===");
 
-                return ViewSection.CreateSection(doc, sectionTypeId, sectionBox);
+                ElementId sectionTypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.ViewTypeSection);
+                System.Diagnostics.Debug.WriteLine($"Default section type ID: {sectionTypeId}");
+
+                if (sectionTypeId == null || sectionTypeId == ElementId.InvalidElementId)
+                {
+                    System.Diagnostics.Debug.WriteLine("No default section type found, searching for alternative...");
+
+                    // Try to find any section view type
+                    var sectionTypes = new FilteredElementCollector(doc)
+                        .OfClass(typeof(ViewFamilyType))
+                        .Cast<ViewFamilyType>()
+                        .Where(vt => vt.ViewFamily == ViewFamily.Section)
+                        .ToList();
+
+                    System.Diagnostics.Debug.WriteLine($"Found {sectionTypes.Count} section view types");
+
+                    if (sectionTypes.Count > 0)
+                    {
+                        sectionTypeId = sectionTypes.First().Id;
+                        System.Diagnostics.Debug.WriteLine($"Using section type: {sectionTypeId}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("*** No section view types found in document ***");
+                        return null;
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Creating section with type {sectionTypeId}");
+                System.Diagnostics.Debug.WriteLine($"SectionBox Min: {sectionBox.Min}, Max: {sectionBox.Max}");
+                System.Diagnostics.Debug.WriteLine($"SectionBox Origin: {sectionBox.Transform.Origin}");
+
+                var section = ViewSection.CreateSection(doc, sectionTypeId, sectionBox);
+
+                if (section != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"*** SUCCESS: Created section with ID: {section.Id} ***");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("*** ViewSection.CreateSection returned NULL ***");
+                }
+
+                return section;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"*** EXCEPTION in CreateViewSection: {ex.Message} ***");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }

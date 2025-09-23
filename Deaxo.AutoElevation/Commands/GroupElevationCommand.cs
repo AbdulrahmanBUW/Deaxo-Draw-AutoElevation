@@ -20,7 +20,7 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                // Expanded category choices for group elevations
+                // EXPANDED category choices - matching Single Element mode
                 var selectOpts = new Dictionary<string, object>()
                 {
                     {"Walls", BuiltInCategory.OST_Walls},
@@ -28,6 +28,14 @@ namespace Deaxo.AutoElevation.Commands
                     {"Doors", BuiltInCategory.OST_Doors},
                     {"Columns", new BuiltInCategory[] { BuiltInCategory.OST_Columns, BuiltInCategory.OST_StructuralColumns }},
                     {"Beams/Framing", BuiltInCategory.OST_StructuralFraming},
+                    {"Furniture", new BuiltInCategory[] { BuiltInCategory.OST_Furniture, BuiltInCategory.OST_FurnitureSystems }},
+                    {"Plumbing Fixtures", BuiltInCategory.OST_PlumbingFixtures},
+                    {"Generic Models", BuiltInCategory.OST_GenericModel},
+                    {"Casework", BuiltInCategory.OST_Casework},
+                    {"Curtain Walls", BuiltInCategory.OST_Walls},
+                    {"Lighting Fixtures", BuiltInCategory.OST_LightingFixtures},
+                    {"Mass", BuiltInCategory.OST_Mass},
+                    {"Parking", BuiltInCategory.OST_Parking},
                     {"Pipes", BuiltInCategory.OST_PipeCurves},
                     {"Pipe Fittings", BuiltInCategory.OST_PipeFitting},
                     {"Pipe Accessories", BuiltInCategory.OST_PipeAccessory},
@@ -36,12 +44,15 @@ namespace Deaxo.AutoElevation.Commands
                     {"Duct Accessories", BuiltInCategory.OST_DuctAccessory},
                     {"Electrical Fixtures", BuiltInCategory.OST_ElectricalFixtures},
                     {"Electrical Equipment", BuiltInCategory.OST_ElectricalEquipment},
-                    {"Plumbing Fixtures", BuiltInCategory.OST_PlumbingFixtures},
                     {"Mechanical Equipment", BuiltInCategory.OST_MechanicalEquipment},
-                    {"Generic Models", BuiltInCategory.OST_GenericModel},
-                    {"Furniture", new BuiltInCategory[] { BuiltInCategory.OST_Furniture, BuiltInCategory.OST_FurnitureSystems }},
-                    {"Lighting Fixtures", BuiltInCategory.OST_LightingFixtures},
-                    {"Casework", BuiltInCategory.OST_Casework},
+                    {"Air Terminals", BuiltInCategory.OST_DuctTerminal},
+                    {"Sprinklers", BuiltInCategory.OST_Sprinklers},
+                    {"Fire Alarm Devices", BuiltInCategory.OST_FireAlarmDevices},
+                    {"Communication Devices", BuiltInCategory.OST_CommunicationDevices},
+                    {"Data Devices", BuiltInCategory.OST_DataDevices},
+                    {"Nurse Call Devices", BuiltInCategory.OST_NurseCallDevices},
+                    {"Security Devices", BuiltInCategory.OST_SecurityDevices},
+                    {"Telephone Devices", BuiltInCategory.OST_TelephoneDevices},
                     {"All Loadable Families", typeof(FamilyInstance)}
                 };
 
@@ -108,11 +119,19 @@ namespace Deaxo.AutoElevation.Commands
 
                     try
                     {
-                        // Create four elevations
+                        // Create four elevations - FIXED to ensure all 4 directions
                         var elevations = SectionGenerator.CreateGroupElevations(doc, overallBB, chosenTemplate);
 
                         if (elevations != null && elevations.Count > 0)
                         {
+                            results.Add($"Successfully created {elevations.Count} elevation views");
+
+                            // Debug: show which directions were created
+                            foreach (var kvp in elevations)
+                            {
+                                results.Add($"Direction {kvp.Key}: View ID {kvp.Value.Id}");
+                            }
+
                             // Create sheets for elevations
                             ElementId titleblockTypeId = GetTitleblockTypeId(doc);
                             if (titleblockTypeId != null)

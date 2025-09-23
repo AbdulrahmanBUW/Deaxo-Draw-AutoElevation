@@ -73,6 +73,12 @@
     <Compile Include="UI\FindReplaceWindow.xaml.cs">
       <DependentUpon>FindReplaceWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\ProgressWindow.xaml.cs">
+      <DependentUpon>ProgressWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\ResultsWindow.xaml.cs">
+      <DependentUpon>ResultsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="UI\SelectFromDictWindow.xaml.cs">
       <DependentUpon>SelectFromDictWindow.xaml</DependentUpon>
     </Compile>
@@ -84,6 +90,12 @@
     <Page Include="UI\FindReplaceWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\ProgressWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\ResultsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="UI\SelectFromDictWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
