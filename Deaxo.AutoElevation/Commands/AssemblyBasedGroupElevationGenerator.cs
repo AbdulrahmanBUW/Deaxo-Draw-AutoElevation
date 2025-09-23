@@ -1,15 +1,16 @@
-﻿// AssemblyBasedGroupElevationGenerator.cs
+﻿// AssemblyBasedGroupElevationGenerator.cs - Fixed Version
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Autodesk.Revit.DB;
-using RevitAssembly = Autodesk.Revit.DB.Assembly;
 
 namespace Deaxo.AutoElevation.Commands
 {
     /// <summary>
     /// Creates group elevations by temporarily using Revit's native Assembly system
     /// then extracting and renaming the views, and safely cleaning up the assembly
+    /// FIXED VERSION - Handles missing Assembly references gracefully
     /// </summary>
     public static class AssemblyBasedGroupElevationGenerator
     {
@@ -40,58 +41,130 @@ namespace Deaxo.AutoElevation.Commands
         }
 
         /// <summary>
-        /// Creates group elevations using Revit's native Assembly system as the engine
+        /// Creates group elevations - falls back to simplified approach if Assembly API is not available
         /// </summary>
         public static AssemblyViewResult CreateGroupViews(Document doc, List<Element> elements, View viewTemplate = null)
         {
             if (elements == null || elements.Count == 0)
                 return null;
 
-            AssemblyInstance tempAssemblyInstance = null;
             try
             {
-                System.Diagnostics.Debug.WriteLine("=== Creating Assembly-Based Group Views ===");
+                System.Diagnostics.Debug.WriteLine("=== Attempting Assembly-Based Group Views ===");
                 System.Diagnostics.Debug.WriteLine($"Processing {elements.Count} elements");
 
-                // Step 1: Create temporary assembly
-                tempAssemblyInstance = CreateTemporaryAssembly(doc, elements);
-                if (tempAssemblyInstance == null)
+                // Check if Assembly functionality is available
+                if (!IsAssemblyFunctionalityAvailable(doc))
                 {
-                    System.Diagnostics.Debug.WriteLine("Failed to create temporary assembly");
-                    return null;
+                    System.Diagnostics.Debug.WriteLine("Assembly functionality not available, falling back to simplified approach");
+                    return CreateFallbackGroupViews(doc, elements, viewTemplate);
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Created temporary assembly instance: {tempAssemblyInstance.Id}");
-
-                // Step 2: Create assembly views using Revit's native system
-                var assemblyViews = CreateAssemblyViews(doc, tempAssemblyInstance);
-                if (assemblyViews == null || assemblyViews.Count == 0)
+                // Try to use Assembly approach
+                AssemblyInstance tempAssemblyInstance = null;
+                try
                 {
-                    System.Diagnostics.Debug.WriteLine("Failed to create assembly views");
-                    return null;
+                    // Step 1: Create temporary assembly
+                    tempAssemblyInstance = CreateTemporaryAssembly(doc, elements);
+                    if (tempAssemblyInstance == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Failed to create temporary assembly, using fallback");
+                        return CreateFallbackGroupViews(doc, elements, viewTemplate);
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"Created temporary assembly instance: {tempAssemblyInstance.Id}");
+
+                    // Step 2: Create assembly views using Revit's native system
+                    var assemblyViews = CreateAssemblyViews(doc, tempAssemblyInstance);
+                    if (assemblyViews == null || assemblyViews.Count == 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Failed to create assembly views, using fallback");
+                        return CreateFallbackGroupViews(doc, elements, viewTemplate);
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"Created {assemblyViews.Count} assembly views");
+
+                    // Step 3: Extract and rename the views
+                    var result = ExtractAndRenameViews(doc, assemblyViews, viewTemplate);
+
+                    System.Diagnostics.Debug.WriteLine($"Successfully extracted {result.AllSectionViews.Count + (result.ThreeDView != null ? 1 : 0)} views");
+
+                    return result;
                 }
-
-                System.Diagnostics.Debug.WriteLine($"Created {assemblyViews.Count} assembly views");
-
-                // Step 3: Extract and rename the views
-                var result = ExtractAndRenameViews(doc, assemblyViews, viewTemplate);
-
-                System.Diagnostics.Debug.WriteLine($"Successfully extracted {result.AllSectionViews.Count + (result.ThreeDView != null ? 1 : 0)} views");
-
-                return result;
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Assembly approach failed: {ex.Message}");
+                    return CreateFallbackGroupViews(doc, elements, viewTemplate);
+                }
+                finally
+                {
+                    // Step 4: Clean up - delete the temporary assembly
+                    if (tempAssemblyInstance != null)
+                    {
+                        CleanupTemporaryAssembly(doc, tempAssemblyInstance);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error in CreateGroupViews: {ex.Message}");
-                return null;
+                // Final fallback to simplified approach
+                return CreateFallbackGroupViews(doc, elements, viewTemplate);
             }
-            finally
+        }
+
+        /// <summary>
+        /// Check if Assembly functionality is available in this Revit version
+        /// </summary>
+        private static bool IsAssemblyFunctionalityAvailable(Document doc)
+        {
+            try
             {
-                // Step 4: Clean up - delete the temporary assembly
-                if (tempAssemblyInstance != null)
+                // Try to access AssemblyInstance type to see if it's available
+                var assemblyInstanceType = typeof(AssemblyInstance);
+
+                // Try to get the Create method to see if it exists
+                var createMethod = assemblyInstanceType.GetMethod("Create",
+                    new Type[] { typeof(Document), typeof(ICollection<ElementId>), typeof(ElementId) });
+
+                return createMethod != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Fallback method using simplified group elevation generator
+        /// </summary>
+        private static AssemblyViewResult CreateFallbackGroupViews(Document doc, List<Element> elements, View viewTemplate)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Using fallback simplified group elevation generator");
+
+                // Use the SimplifiedGroupElevationGenerator as fallback
+                var simplifiedResult = SimplifiedGroupElevationGenerator.CreateGroupViews(doc, elements, viewTemplate);
+
+                if (simplifiedResult == null) return null;
+
+                // Convert SimplifiedGroupElevationGenerator.GroupViewResult to AssemblyViewResult
+                return new AssemblyViewResult
                 {
-                    CleanupTemporaryAssembly(doc, tempAssemblyInstance);
-                }
+                    TopView = simplifiedResult.TopView,
+                    BottomView = simplifiedResult.BottomView,
+                    LeftView = simplifiedResult.LeftView,
+                    RightView = simplifiedResult.RightView,
+                    FrontView = simplifiedResult.FrontView,
+                    BackView = simplifiedResult.BackView,
+                    ThreeDView = simplifiedResult.ThreeDView
+                };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fallback approach also failed: {ex.Message}");
+                return null;
             }
         }
 
@@ -105,8 +178,44 @@ namespace Deaxo.AutoElevation.Commands
                 // Convert elements to ElementIds
                 var elementIds = elements.Select(e => e.Id).ToList();
 
-                // Create assembly instance
-                var assemblyId = AssemblyInstance.Create(doc, elementIds, elements.First().Category.Id);
+                if (elementIds.Count == 0) return null;
+
+                // Get the category of the first element
+                var firstElement = elements.First();
+                if (firstElement.Category == null) return null;
+
+                // Create assembly instance - Use reflection to handle different API versions
+                ElementId assemblyId = null;
+                try
+                {
+                    // Try the standard method signature first
+                    var createMethod = typeof(AssemblyInstance).GetMethod("Create",
+                        new Type[] { typeof(Document), typeof(ICollection<ElementId>), typeof(ElementId) });
+
+                    if (createMethod != null)
+                    {
+                        // Method exists, call it
+                        var result = createMethod.Invoke(null, new object[] { doc, elementIds, firstElement.Category.Id });
+                        assemblyId = result as ElementId;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("AssemblyInstance.Create method not found");
+                        return null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"AssemblyInstance.Create failed: {ex.Message}");
+                    return null;
+                }
+
+                if (assemblyId == null || assemblyId == ElementId.InvalidElementId)
+                {
+                    System.Diagnostics.Debug.WriteLine("AssemblyInstance.Create returned invalid ID");
+                    return null;
+                }
+
                 var assemblyInstance = doc.GetElement(assemblyId) as AssemblyInstance;
 
                 if (assemblyInstance == null)
@@ -147,18 +256,15 @@ namespace Deaxo.AutoElevation.Commands
                 // Try to use assembly's built-in view creation methods
                 try
                 {
-                    // Get the assembly type
-                    var assemblyType = doc.GetElement(assemblyInstance.GetTypeId()) as RevitAssembly;
+                    // Get the assembly type - FIXED: Use proper method
+                    var assemblyTypeId = assemblyInstance.GetTypeId();
+                    var assemblyType = doc.GetElement(assemblyTypeId);
+
                     if (assemblyType != null)
                     {
-                        // Try to create views using assembly methods
-                        // Note: The API for this may vary by Revit version
-                        System.Diagnostics.Debug.WriteLine("Attempting to use assembly built-in view creation");
+                        System.Diagnostics.Debug.WriteLine("Found assembly type, attempting view creation");
 
-                        // This is the method that should work, but may not be available in all versions
-                        // var viewIds = assemblyType.CreateOrthographic3DViews();
-
-                        // For now, fall back to manual creation
+                        // For now, fall back to manual creation since Assembly view creation API varies by version
                         var fallbackViews = CreateFallbackAssemblyViews(doc, assemblyInstance, sectionViewType);
                         if (fallbackViews != null)
                         {
@@ -168,7 +274,7 @@ namespace Deaxo.AutoElevation.Commands
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Native assembly view creation failed: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Assembly view creation failed: {ex.Message}");
 
                     // Fallback: Try manual creation of section views around assembly
                     var fallbackViews = CreateFallbackAssemblyViews(doc, assemblyInstance, sectionViewType);
@@ -450,26 +556,6 @@ namespace Deaxo.AutoElevation.Commands
         }
 
         /// <summary>
-        /// Detach views from assembly so they can exist independently
-        /// </summary>
-        private static void DetachViewsFromAssembly(Document doc, AssemblyInstance assemblyInstance, List<View> views)
-        {
-            try
-            {
-                // Note: This is conceptual - Revit may not allow easy detachment
-                // The views should remain independent once the assembly is deleted
-                System.Diagnostics.Debug.WriteLine($"Detaching {views.Count} views from assembly {assemblyInstance.Id}");
-
-                // In practice, the views created by assembly should continue to exist
-                // even after the assembly is deleted, as long as they're not assembly-specific views
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error detaching views from assembly: {ex.Message}");
-            }
-        }
-
-        /// <summary>
         /// Clean up the temporary assembly
         /// </summary>
         private static void CleanupTemporaryAssembly(Document doc, AssemblyInstance assemblyInstance)
@@ -481,13 +567,16 @@ namespace Deaxo.AutoElevation.Commands
                 // Get assembly type before deleting instance
                 var assemblyTypeId = assemblyInstance.GetTypeId();
 
-                // Delete assembly instance
+                // Delete assembly instance - FIXED: Use ElementId
                 doc.Delete(assemblyInstance.Id);
                 System.Diagnostics.Debug.WriteLine($"Deleted assembly instance: {assemblyInstance.Id}");
 
                 // Delete assembly type
-                doc.Delete(assemblyTypeId);
-                System.Diagnostics.Debug.WriteLine($"Deleted assembly type: {assemblyTypeId}");
+                if (assemblyTypeId != null && assemblyTypeId != ElementId.InvalidElementId)
+                {
+                    doc.Delete(assemblyTypeId);
+                    System.Diagnostics.Debug.WriteLine($"Deleted assembly type: {assemblyTypeId}");
+                }
             }
             catch (Exception ex)
             {
@@ -504,14 +593,6 @@ namespace Deaxo.AutoElevation.Commands
                 .OfClass(typeof(ViewFamilyType))
                 .Cast<ViewFamilyType>()
                 .FirstOrDefault(vt => vt.ViewFamily == viewFamily);
-        }
-
-        private static AssemblyInstance GetAssemblyInstance(Document doc, RevitAssembly assembly)
-        {
-            return new FilteredElementCollector(doc)
-                .OfClass(typeof(AssemblyInstance))
-                .Cast<AssemblyInstance>()
-                .FirstOrDefault(ai => ai.GetTypeId() == assembly.Id);
         }
 
         private static void SetUniqueViewName(View view, string baseName)

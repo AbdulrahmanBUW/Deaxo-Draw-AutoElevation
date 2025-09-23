@@ -1,4 +1,4 @@
-﻿// Updated GroupElevationCommand.cs - Using Simplified Approach
+﻿// Enhanced GroupElevationCommand.cs with Debug Output
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +21,8 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
+                System.Diagnostics.Debug.WriteLine("=== GROUP ELEVATION COMMAND STARTED ===");
+
                 // Element selection categories
                 var selectOpts = new Dictionary<string, object>()
                 {
@@ -85,8 +87,18 @@ namespace Deaxo.AutoElevation.Commands
                     return Result.Cancelled;
                 }
 
+                System.Diagnostics.Debug.WriteLine($"Selected {refs.Count} element references");
+
                 // Get view template
                 View chosenTemplate = GetViewTemplate(doc);
+                if (chosenTemplate != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Using view template: {chosenTemplate.Name} (ID: {chosenTemplate.Id})");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("No view template selected");
+                }
 
                 // Show progress window
                 var progressWindow = new ProgressWindow();
@@ -105,75 +117,140 @@ namespace Deaxo.AutoElevation.Commands
                         var selectedElements = refs.Select(r => doc.GetElement(r)).ToList();
                         results.Add($"Selected {selectedElements.Count} elements for group elevation views");
 
+                        System.Diagnostics.Debug.WriteLine($"Processing elements:");
+                        foreach (var el in selectedElements)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  - Element {el.Id}: {el.GetType().Name}, Category: {el.Category?.Name ?? "None"}");
+                        }
+
                         progressWindow.UpdateProgress(1, 10);
                         progressWindow.AddLogMessage($"Processing {selectedElements.Count} elements");
 
-                        // Create group views using assembly-based approach
-                        progressWindow.UpdateStatus("Creating views...", "Using Revit's native Assembly system to generate orthographic views");
+                        // Create group views using the enhanced approach
+                        progressWindow.UpdateStatus("Creating views...", "Using enhanced group elevation generator");
                         progressWindow.UpdateProgress(3, 10);
 
-                        var groupViews = AssemblyBasedGroupElevationGenerator.CreateGroupViews(doc, selectedElements, chosenTemplate);
+                        System.Diagnostics.Debug.WriteLine("\n=== CALLING GROUP VIEW GENERATOR ===");
+
+                        // Use the SimplifiedGroupElevationGenerator directly for better control
+                        var groupViews = SimplifiedGroupElevationGenerator.CreateGroupViews(doc, selectedElements, chosenTemplate);
 
                         if (groupViews == null)
                         {
-                            progressWindow.ShowError("Failed to create group elevation views");
-                            results.Add("ERROR: Could not create group elevation views");
+                            var errorMsg = "Failed to create group elevation views - generator returned null";
+                            System.Diagnostics.Debug.WriteLine($"ERROR: {errorMsg}");
+                            progressWindow.ShowError(errorMsg);
+                            results.Add($"ERROR: {errorMsg}");
                             t.RollBack();
                             return Result.Failed;
                         }
 
                         progressWindow.UpdateProgress(6, 10);
-                        progressWindow.AddLogMessage("Successfully created views");
+                        progressWindow.AddLogMessage("View generation completed");
 
-                        // Count and log created views
+                        // Count and log created views - DETAILED ANALYSIS
                         int viewCount = 0;
                         var createdViews = new List<(string type, View view)>();
+
+                        System.Diagnostics.Debug.WriteLine("\n=== ANALYZING CREATED VIEWS ===");
 
                         if (groupViews.TopView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Top", groupViews.TopView));
-                            results.Add($"Created Top view: {groupViews.TopView.Id}");
+                            results.Add($"✓ Created Top view: {groupViews.TopView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ TOP VIEW: ID {groupViews.TopView.Id}, Name: {groupViews.TopView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Top view");
+                            System.Diagnostics.Debug.WriteLine($"✗ TOP VIEW: FAILED");
+                        }
+
                         if (groupViews.BottomView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Bottom", groupViews.BottomView));
-                            results.Add($"Created Bottom view: {groupViews.BottomView.Id}");
+                            results.Add($"✓ Created Bottom view: {groupViews.BottomView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ BOTTOM VIEW: ID {groupViews.BottomView.Id}, Name: {groupViews.BottomView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Bottom view");
+                            System.Diagnostics.Debug.WriteLine($"✗ BOTTOM VIEW: FAILED");
+                        }
+
                         if (groupViews.LeftView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Left", groupViews.LeftView));
-                            results.Add($"Created Left view: {groupViews.LeftView.Id}");
+                            results.Add($"✓ Created Left view: {groupViews.LeftView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ LEFT VIEW: ID {groupViews.LeftView.Id}, Name: {groupViews.LeftView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Left view");
+                            System.Diagnostics.Debug.WriteLine($"✗ LEFT VIEW: FAILED");
+                        }
+
                         if (groupViews.RightView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Right", groupViews.RightView));
-                            results.Add($"Created Right view: {groupViews.RightView.Id}");
+                            results.Add($"✓ Created Right view: {groupViews.RightView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ RIGHT VIEW: ID {groupViews.RightView.Id}, Name: {groupViews.RightView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Right view");
+                            System.Diagnostics.Debug.WriteLine($"✗ RIGHT VIEW: FAILED");
+                        }
+
                         if (groupViews.FrontView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Front", groupViews.FrontView));
-                            results.Add($"Created Front view: {groupViews.FrontView.Id}");
+                            results.Add($"✓ Created Front view: {groupViews.FrontView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ FRONT VIEW: ID {groupViews.FrontView.Id}, Name: {groupViews.FrontView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Front view");
+                            System.Diagnostics.Debug.WriteLine($"✗ FRONT VIEW: FAILED");
+                        }
+
                         if (groupViews.BackView != null)
                         {
                             viewCount++;
                             createdViews.Add(("Back", groupViews.BackView));
-                            results.Add($"Created Back view: {groupViews.BackView.Id}");
+                            results.Add($"✓ Created Back view: {groupViews.BackView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ BACK VIEW: ID {groupViews.BackView.Id}, Name: {groupViews.BackView.Name}");
                         }
+                        else
+                        {
+                            results.Add($"✗ Failed to create Back view");
+                            System.Diagnostics.Debug.WriteLine($"✗ BACK VIEW: FAILED");
+                        }
+
                         if (groupViews.ThreeDView != null)
                         {
                             viewCount++;
                             createdViews.Add(("3D", groupViews.ThreeDView));
-                            results.Add($"Created 3D view: {groupViews.ThreeDView.Id}");
+                            results.Add($"✓ Created 3D view: {groupViews.ThreeDView.Id}");
+                            System.Diagnostics.Debug.WriteLine($"✓ 3D VIEW: ID {groupViews.ThreeDView.Id}, Name: {groupViews.ThreeDView.Name}");
+                        }
+                        else
+                        {
+                            results.Add($"✗ Failed to create 3D view");
+                            System.Diagnostics.Debug.WriteLine($"✗ 3D VIEW: FAILED");
                         }
 
                         progressWindow.UpdateProgress(8, 10);
-                        progressWindow.AddLogMessage($"Successfully created {viewCount} views total");
+                        progressWindow.AddLogMessage($"Successfully created {viewCount} views out of 7 expected");
+
+                        System.Diagnostics.Debug.WriteLine($"\n=== VIEW CREATION SUMMARY ===");
+                        System.Diagnostics.Debug.WriteLine($"TOTAL VIEWS CREATED: {viewCount}/7");
+                        System.Diagnostics.Debug.WriteLine($"SUCCESS RATE: {(viewCount / 7.0) * 100:F1}%");
 
                         if (viewCount == 0)
                         {
@@ -189,11 +266,22 @@ namespace Deaxo.AutoElevation.Commands
 
                         if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
                         {
+                            System.Diagnostics.Debug.WriteLine($"Using titleblock type: {titleblockTypeId}");
                             int sheetCounter = 1;
                             foreach (var (type, view) in createdViews)
                             {
-                                CreateSheetForView(doc, type, view, titleblockTypeId, sheetCounter, results);
-                                sheetCounter++;
+                                try
+                                {
+                                    CreateSheetForView(doc, type, view, titleblockTypeId, sheetCounter, results);
+                                    sheetCounter++;
+                                    System.Diagnostics.Debug.WriteLine($"Created sheet for {type} view");
+                                }
+                                catch (Exception sheetEx)
+                                {
+                                    var error = $"Failed to create sheet for {type} view: {sheetEx.Message}";
+                                    results.Add(error);
+                                    System.Diagnostics.Debug.WriteLine($"ERROR: {error}");
+                                }
                             }
 
                             progressWindow.AddLogMessage($"Created {createdViews.Count} sheets with placed views");
@@ -202,6 +290,7 @@ namespace Deaxo.AutoElevation.Commands
                         {
                             results.Add("Warning: No titleblock found, views created without sheets");
                             progressWindow.AddLogMessage("Warning: Views created without sheets (no titleblock available)");
+                            System.Diagnostics.Debug.WriteLine("WARNING: No titleblock available for sheet creation");
                         }
 
                         progressWindow.UpdateProgress(10, 10);
@@ -210,6 +299,10 @@ namespace Deaxo.AutoElevation.Commands
                         // Show completion
                         var duration = DateTime.Now - startTime;
                         progressWindow.ShowCompletion(results, "Group Elevations");
+
+                        System.Diagnostics.Debug.WriteLine($"=== COMMAND COMPLETED SUCCESSFULLY ===");
+                        System.Diagnostics.Debug.WriteLine($"Total duration: {duration.TotalSeconds:F1} seconds");
+                        System.Diagnostics.Debug.WriteLine($"Final result count: {results.Count} messages");
 
                         // Wait a moment then show detailed results
                         System.Threading.Thread.Sleep(1500);
@@ -221,8 +314,12 @@ namespace Deaxo.AutoElevation.Commands
                     }
                     catch (Exception ex)
                     {
-                        progressWindow.ShowError(ex.Message);
-                        results.Add($"ERROR: {ex.Message}");
+                        var errorMsg = $"Exception in group elevation command: {ex.Message}";
+                        System.Diagnostics.Debug.WriteLine($"FATAL ERROR: {errorMsg}");
+                        System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+
+                        progressWindow.ShowError(errorMsg);
+                        results.Add($"ERROR: {errorMsg}");
                         t.RollBack();
                         throw;
                     }
@@ -232,10 +329,14 @@ namespace Deaxo.AutoElevation.Commands
             }
             catch (Exception ex)
             {
-                message = ex.Message;
+                var errorMsg = $"Fatal error in GroupElevationCommand: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"FATAL: {errorMsg}");
+                message = errorMsg;
                 return Result.Failed;
             }
         }
+
+        // ... (rest of the methods remain the same)
 
         private View GetViewTemplate(Document doc)
         {
