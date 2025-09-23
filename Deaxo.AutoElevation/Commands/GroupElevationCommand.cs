@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Updated GroupElevationCommand.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.Attributes;
@@ -75,7 +76,7 @@ namespace Deaxo.AutoElevation.Commands
                 try
                 {
                     refs = uidoc.Selection.PickObjects(ObjectType.Element, selFilter,
-                        "Select elements for group elevation (4 views will be created around the group)");
+                        "Select elements for assembly-style orthographic views (Top, Bottom, Left, Right, Front, Back + 3D)");
                 }
                 catch (OperationCanceledException)
                 {
@@ -92,85 +93,121 @@ namespace Deaxo.AutoElevation.Commands
                 // Get view template
                 View chosenTemplate = GetViewTemplate(doc);
 
-                // Create group elevations
+                // Show progress window
+                var progressWindow = new ProgressWindow();
+                progressWindow.Show();
+                progressWindow.UpdateStatus("Analyzing geometry...", "Determining optimal coordinate system");
+
                 var results = new List<string>();
-                using (Transaction t = new Transaction(doc, "DEAXO - Create Group Elevations"))
+                var startTime = DateTime.Now;
+
+                using (Transaction t = new Transaction(doc, "DEAXO - Create Assembly-Style Group Elevations"))
                 {
                     t.Start();
 
-                    var selectedElements = refs.Select(r => doc.GetElement(r)).ToList();
-                    results.Add($"Selected {selectedElements.Count} elements for group elevation");
-
-                    // Calculate bounding box
-                    BoundingBoxXYZ overallBB = ScopeBoxHelper.CalculateOverallBoundingBox(selectedElements);
-                    if (overallBB == null)
-                    {
-                        TaskDialog.Show("DEAXO", "Could not calculate bounding box for selected elements.");
-                        t.RollBack();
-                        return Result.Failed;
-                    }
-
-                    results.Add($"Bounding box: Min({overallBB.Min.X:F1}, {overallBB.Min.Y:F1}, {overallBB.Min.Z:F1}) Max({overallBB.Max.X:F1}, {overallBB.Max.Y:F1}, {overallBB.Max.Z:F1})");
-
-                    // Optional scope box creation (for reference, then deleted)
-                    Element scopeBox = ScopeBoxHelper.CreateScopeBoxFromElements(doc, selectedElements);
-                    if (scopeBox != null)
-                        results.Add($"Created temporary scope box: {scopeBox.Id}");
-
                     try
                     {
-                        // Create four elevations - FIXED to ensure all 4 directions
-                        var elevations = SectionGenerator.CreateGroupElevations(doc, overallBB, chosenTemplate);
+                        var selectedElements = refs.Select(r => doc.GetElement(r)).ToList();
+                        results.Add($"Selected {selectedElements.Count} elements for assembly-style elevation views");
 
-                        if (elevations != null && elevations.Count > 0)
+                        progressWindow.UpdateProgress(1, 10);
+                        progressWindow.AddLogMessage($"Processing {selectedElements.Count} elements");
+
+                        // Create assembly-style views using the new generator
+                        progressWindow.UpdateStatus("Creating orthographic views...", "Generating Top, Bottom, Left, Right, Front, Back + 3D views");
+                        progressWindow.UpdateProgress(3, 10);
+
+                        var assemblyViews = AssemblyStyleElevationGenerator.CreateAssemblyStyleViews(doc, selectedElements, chosenTemplate);
+
+                        if (assemblyViews == null)
                         {
-                            results.Add($"Successfully created {elevations.Count} elevation views");
+                            progressWindow.ShowError("Failed to analyze element geometry for view creation");
+                            results.Add("ERROR: Could not analyze selected elements for view creation");
+                            t.RollBack();
+                            return Result.Failed;
+                        }
 
-                            // Debug: show which directions were created
-                            foreach (var kvp in elevations)
-                            {
-                                results.Add($"Direction {kvp.Key}: View ID {kvp.Value.Id}");
-                            }
+                        progressWindow.UpdateProgress(6, 10);
+                        progressWindow.AddLogMessage("Successfully analyzed geometry and created coordinate system");
 
-                            // Create sheets for elevations
-                            ElementId titleblockTypeId = GetTitleblockTypeId(doc);
-                            if (titleblockTypeId != null)
+                        // Count created views
+                        int viewCount = 0;
+                        if (assemblyViews.TopView != null) { viewCount++; results.Add($"Created Top view: {assemblyViews.TopView.Id}"); }
+                        if (assemblyViews.BottomView != null) { viewCount++; results.Add($"Created Bottom view: {assemblyViews.BottomView.Id}"); }
+                        if (assemblyViews.LeftView != null) { viewCount++; results.Add($"Created Left view: {assemblyViews.LeftView.Id}"); }
+                        if (assemblyViews.RightView != null) { viewCount++; results.Add($"Created Right view: {assemblyViews.RightView.Id}"); }
+                        if (assemblyViews.FrontView != null) { viewCount++; results.Add($"Created Front view: {assemblyViews.FrontView.Id}"); }
+                        if (assemblyViews.BackView != null) { viewCount++; results.Add($"Created Back view: {assemblyViews.BackView.Id}"); }
+                        if (assemblyViews.ThreeDView != null) { viewCount++; results.Add($"Created 3D Orthographic view: {assemblyViews.ThreeDView.Id}"); }
+
+                        progressWindow.UpdateProgress(8, 10);
+                        progressWindow.AddLogMessage($"Successfully created {viewCount} orthographic views");
+
+                        if (viewCount == 0)
+                        {
+                            progressWindow.ShowError("No views were created");
+                            results.Add("ERROR: Failed to create any orthographic views");
+                            t.RollBack();
+                            return Result.Failed;
+                        }
+
+                        // Create sheets for all section views
+                        progressWindow.UpdateStatus("Creating sheets...", "Placing views on sheets");
+                        ElementId titleblockTypeId = GetTitleblockTypeId(doc);
+
+                        if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
+                        {
+                            int sheetCounter = 1;
+
+                            // Create sheets for all section views
+                            var allSectionViews = assemblyViews.AllSectionViews;
+                            foreach (var sectionView in allSectionViews)
                             {
-                                int sheetCounter = 1;
-                                foreach (var kvp in elevations)
+                                if (sectionView != null)
                                 {
-                                    CreateSheetForElevation(doc, kvp.Key, kvp.Value, titleblockTypeId,
-                                        sheetCounter, results);
+                                    string viewType = DetermineViewType(sectionView.Name);
+                                    CreateSheetForView(doc, viewType, sectionView, titleblockTypeId, sheetCounter, results);
                                     sheetCounter++;
                                 }
                             }
-                            else
+
+                            // Create sheet for 3D view if it exists
+                            if (assemblyViews.ThreeDView != null)
                             {
-                                results.Add("Warning: No titleblock found, elevations created without sheets");
-                                foreach (var kvp in elevations)
-                                {
-                                    results.Add($"{kvp.Key} View created: {kvp.Value.Id}");
-                                }
+                                CreateSheetFor3DView(doc, assemblyViews.ThreeDView, titleblockTypeId, sheetCounter, results);
                             }
+
+                            progressWindow.AddLogMessage($"Created {sheetCounter - 1} sheets with placed views");
                         }
                         else
                         {
-                            results.Add("Failed to create group elevations");
+                            results.Add("Warning: No titleblock found, views created without sheets");
+                            progressWindow.AddLogMessage("Warning: Views created without sheets (no titleblock available)");
                         }
+
+                        progressWindow.UpdateProgress(10, 10);
+                        t.Commit();
+
+                        // Show completion
+                        var duration = DateTime.Now - startTime;
+                        progressWindow.ShowCompletion(results, "Assembly-Style Group Elevations");
+
+                        // Wait a moment then show detailed results
+                        System.Threading.Thread.Sleep(1500);
+                        progressWindow.Close();
+
+                        // Show detailed results window
+                        var resultsWindow = new ResultsWindow(results, "Assembly-Style Group Elevations", duration);
+                        resultsWindow.ShowDialog();
                     }
-                    finally
+                    catch (Exception ex)
                     {
-                        // Clean up scope box
-                        ScopeBoxHelper.DeleteScopeBoxSafely(doc, scopeBox);
+                        progressWindow.ShowError(ex.Message);
+                        results.Add($"ERROR: {ex.Message}");
+                        t.RollBack();
+                        throw;
                     }
-
-                    t.Commit();
                 }
-
-                // Show results
-                var msgText = string.Join(Environment.NewLine, results.Take(50));
-                TaskDialog.Show("DEAXO - Group Elevations Created",
-                    string.IsNullOrWhiteSpace(msgText) ? "No new elevations created." : msgText);
 
                 return Result.Succeeded;
             }
@@ -195,7 +232,7 @@ namespace Deaxo.AutoElevation.Commands
             templateNames.Insert(0, "None");
 
             var templateWindow = new SelectFromDictWindow(templateNames,
-                "Select ViewTemplate for Group Elevations", allowMultiple: false);
+                "Select ViewTemplate for Assembly-Style Group Elevations", allowMultiple: false);
             bool? result = templateWindow.ShowDialog();
 
             if (result == true && templateWindow.SelectedItems.Count > 0)
@@ -224,7 +261,7 @@ namespace Deaxo.AutoElevation.Commands
             return tb?.Id;
         }
 
-        private void CreateSheetForElevation(Document doc, string direction, ViewSection elevation,
+        private void CreateSheetForView(Document doc, string viewType, ViewSection sectionView,
             ElementId titleblockTypeId, int counter, List<string> results)
         {
             try
@@ -232,19 +269,52 @@ namespace Deaxo.AutoElevation.Commands
                 var sheet = ViewSheet.Create(doc, titleblockTypeId);
                 XYZ pos = new XYZ(0.5, 0.5, 0);
 
-                if (Viewport.CanAddViewToSheet(doc, sheet.Id, elevation.Id))
-                    Viewport.Create(doc, sheet.Id, elevation.Id, pos);
+                if (Viewport.CanAddViewToSheet(doc, sheet.Id, sectionView.Id))
+                    Viewport.Create(doc, sheet.Id, sectionView.Id, pos);
 
-                string sheetNumber = $"DEAXO_GE_{counter}_{DateTime.Now:HHmmss}";
-                string sheetName = $"Group Elevation - {direction} View (DEAXO GmbH)";
+                string sheetNumber = $"DEAXO_ASM_{viewType}_{counter}_{DateTime.Now:HHmmss}";
+                string sheetName = $"Assembly-Style {viewType} Elevation (DEAXO GmbH)";
 
                 SetUniqueSheetName(sheet, sheetNumber, sheetName);
-                results.Add($"{direction} View -> Sheet:{sheet.Id} Elevation:{elevation.Id}");
+                results.Add($"{viewType} Elevation -> Sheet:{sheet.Id} View:{sectionView.Id}");
             }
             catch (Exception ex)
             {
-                results.Add($"Failed to create sheet for {direction} elevation: {ex.Message}");
+                results.Add($"Failed to create sheet for {viewType} elevation: {ex.Message}");
             }
+        }
+
+        private void CreateSheetFor3DView(Document doc, View3D view3D, ElementId titleblockTypeId, int counter, List<string> results)
+        {
+            try
+            {
+                var sheet = ViewSheet.Create(doc, titleblockTypeId);
+                XYZ pos = new XYZ(0.5, 0.5, 0);
+
+                if (Viewport.CanAddViewToSheet(doc, sheet.Id, view3D.Id))
+                    Viewport.Create(doc, sheet.Id, view3D.Id, pos);
+
+                string sheetNumber = $"DEAXO_ASM_3D_{counter}_{DateTime.Now:HHmmss}";
+                string sheetName = $"Assembly-Style 3D Orthographic (DEAXO GmbH)";
+
+                SetUniqueSheetName(sheet, sheetNumber, sheetName);
+                results.Add($"3D Orthographic -> Sheet:{sheet.Id} View:{view3D.Id}");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"Failed to create sheet for 3D view: {ex.Message}");
+            }
+        }
+
+        private string DetermineViewType(string viewName)
+        {
+            if (viewName.Contains("Top")) return "Top";
+            if (viewName.Contains("Bottom")) return "Bottom";
+            if (viewName.Contains("Left")) return "Left";
+            if (viewName.Contains("Right")) return "Right";
+            if (viewName.Contains("Front")) return "Front";
+            if (viewName.Contains("Back")) return "Back";
+            return "Unknown";
         }
 
         private void SetUniqueSheetName(ViewSheet sheet, string baseNumber, string baseName)

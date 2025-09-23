@@ -2,52 +2,35 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="DEAXO Auto Elevation - Mode Selection"
-        Height="583" Width="800"
+        Width="545" Height="348"
         WindowStartupLocation="CenterScreen"
-        Background="#F8F9FA"
+        Background="#FFFFFF"
         FontFamily="Segoe UI"
         ResizeMode="NoResize">
 
     <Window.Resources>
-        <!-- Modern Card Style with Hover Effects -->
-        <Style x:Key="ModernCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="BorderBrush" Value="#E9ECEF"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="32"/>
-            <Setter Property="Margin" Value="16"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect BlurRadius="12" Direction="270" ShadowDepth="4" Opacity="0.08"/>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="#007AFF"/>
-                    <Setter Property="Effect">
-                        <Setter.Value>
-                            <DropShadowEffect BlurRadius="16" Direction="270" ShadowDepth="6" Opacity="0.15"/>
-                        </Setter.Value>
-                    </Setter>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+        <!-- iOS-like color palette -->
+        <SolidColorBrush x:Key="iOSBlue" Color="#007AFF"/>
+        <SolidColorBrush x:Key="iOSGreen" Color="#34C759"/>
+        <SolidColorBrush x:Key="iOSGray" Color="#6C757D"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#222222"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#666666"/>
 
-        <!-- Enhanced Button Style -->
-        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="50"/>
-            <Setter Property="FontSize" Value="16"/>
+        <!-- Reusable rounded button template -->
+        <Style x:Key="RoundedButtonBase" TargetType="Button">
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="16,6"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border Background="{TemplateBinding Background}"
                                 CornerRadius="10"
-                                Padding="32,14">
+                                Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
@@ -55,166 +38,67 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Opacity" Value="0.9"/>
+                    <Setter Property="Opacity" Value="0.95"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Opacity" Value="0.8"/>
+                    <Setter Property="Opacity" Value="0.92"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
-        <!-- Icon Style -->
-        <Style x:Key="IconStyle" TargetType="Ellipse">
-            <Setter Property="Width" Value="80"/>
-            <Setter Property="Height" Value="80"/>
-            <Setter Property="Margin" Value="0,0,0,20"/>
+        <!-- Concrete colored styles using the base -->
+        <Style x:Key="BlueButton" TargetType="Button" BasedOn="{StaticResource RoundedButtonBase}">
+            <Setter Property="Background" Value="{StaticResource iOSBlue}"/>
         </Style>
 
-        <!-- Feature List Style -->
-        <Style x:Key="FeatureTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="#6C757D"/>
-            <Setter Property="Margin" Value="0,4"/>
+        <Style x:Key="GreenButton" TargetType="Button" BasedOn="{StaticResource RoundedButtonBase}">
+            <Setter Property="Background" Value="{StaticResource iOSGreen}"/>
+        </Style>
+
+        <Style x:Key="GrayButton" TargetType="Button" BasedOn="{StaticResource RoundedButtonBase}">
+            <Setter Property="Background" Value="{StaticResource iOSGray}"/>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="40">
+    <Grid Margin="24">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Enhanced Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,40" HorizontalAlignment="Center">
-            <!-- Company Logo/Brand -->
-
-            <TextBlock Text="Choose your elevation mode" 
-                       FontSize="36" 
-                       FontWeight="Light" 
-                       Foreground="#212529" 
-                       HorizontalAlignment="Center" 
-                       Margin="0,0,0,8"/>
-            <TextBlock 
-                       FontSize="18" 
-                       Foreground="#6C757D" 
+        <!-- Header -->
+        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,6">
+            <TextBlock Text="Choose elevation mode"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimary}"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="Pick one of the modes below"
+                       FontSize="12"
+                       Foreground="{StaticResource TextSecondary}"
                        HorizontalAlignment="Center"/>
         </StackPanel>
 
-        <!-- Enhanced Mode Cards -->
-        <Grid Margin="0,177,0,10" Grid.RowSpan="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <!-- Mode buttons in the middle -->
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Width="420">
+            <Button Content="Group Elevation"
+                    Style="{StaticResource BlueButton}"
+                    Click="GroupElement_Click"
+                    Margin="0,0,0,12"/>
+            <Button Content="Internal Elevation"
+                    Style="{StaticResource GreenButton}"
+                    Click="InternalElevation_Click"/>
+        </StackPanel>
 
-            <!-- Group Element Card -->
-            <Border Grid.Column="0" Style="{StaticResource ModernCardStyle}" Margin="16,16,16,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Icon and Title -->
-                    <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,24">
-
-                        <TextBlock Text="Group Elevation" 
-                                   FontSize="26" 
-                                   FontWeight="SemiBold" 
-                                   Foreground="#FF6B35" 
-                                   HorizontalAlignment="Center" 
-                                   Margin="0,16,0,8"/>
-                    </StackPanel>
-
-                    <!-- Description and Features -->
-                    <StackPanel Grid.Row="1"/>
-
-                    <Button Grid.Row="2" 
-                            Content="Select" 
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Background="#FF6B35"
-                            Click="GroupElement_Click"/>
-                </Grid>
-            </Border>
-
-            <!-- Internal Elevation Card -->
-            <Border Grid.Column="1" Style="{StaticResource ModernCardStyle}" Margin="16,16,16,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Icon and Title -->
-                    <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,24">
-
-                        <TextBlock Text="Internal Elevation" 
-                                   FontSize="26" 
-                                   FontWeight="SemiBold" 
-                                   Foreground="#34C759" 
-                                   HorizontalAlignment="Center" 
-                                   Margin="0,16,0,8"/>
-                    </StackPanel>
-
-                    <!-- Description and Features -->
-                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,223" Width="262">
-
-                        <StackPanel Margin="0,0,0,24"/>
-                    </StackPanel>
-
-                    <Button Grid.Row="2" 
-                            Content="Select" 
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Background="#34C759"
-                            Click="InternalElevation_Click"/>
-                </Grid>
-            </Border>
-        </Grid>
-
-        <!-- Enhanced Footer -->
-        <Grid Grid.Row="2" Margin="0,40,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Help Text -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Center"/>
-
-            <!-- Cancel Button -->
-            <Button Grid.Column="1" 
-                    Content="Cancel" 
-                    Width="140" 
-                    Height="44"
-                    Background="#6C757D" 
-                    Foreground="White"
-                    FontSize="14"
-                    FontWeight="Medium"
-                    BorderThickness="0"
-                    Cursor="Hand"
-                    Click="Cancel_Click">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
-                                CornerRadius="10"
-                                Padding="20,12">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Button.Template>
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#5A6268"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
-        </Grid>
+        <!-- Footer: Cancel -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel"
+                    Width="120"
+                    Height="36"
+                    Margin="0,8,0,0"
+                    Style="{StaticResource GrayButton}"
+                    Click="Cancel_Click"/>
+        </StackPanel>
     </Grid>
 </Window>

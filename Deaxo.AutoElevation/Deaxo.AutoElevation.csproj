@@ -56,6 +56,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App.cs" />
+    <Compile Include="Commands\AssemblyStyleElevationGenerator.cs" />
     <Compile Include="Commands\AutoElevationCommand.cs" />
     <Compile Include="Commands\DXSelectionFilter.cs" />
     <Compile Include="Commands\ElementProperties.cs" />

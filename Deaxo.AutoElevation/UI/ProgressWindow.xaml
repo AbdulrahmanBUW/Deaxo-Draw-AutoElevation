@@ -4,7 +4,7 @@
         Title="DEAXO Auto Elevation - Processing"
         Height="500" Width="500"
         WindowStartupLocation="CenterScreen"
-        Background="#F8F9FA"
+        Background="Transparent"
         FontFamily="Segoe UI"
         ResizeMode="NoResize"
         WindowStyle="None"
@@ -67,8 +67,50 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- Title Bar with Close Button -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Window Title -->
+                <TextBlock Grid.Column="0" 
+                           Text="DEAXO Auto Elevation - Processing" 
+                           FontSize="14" 
+                           FontWeight="SemiBold" 
+                           Foreground="#495057" 
+                           VerticalAlignment="Center"/>
+
+                <!-- Close Button -->
+                <Button Grid.Column="1" 
+                        x:Name="CloseButton"
+                        Content="✕" 
+                        Width="24" 
+                        Height="24"
+                        Background="Transparent" 
+                        Foreground="#6C757D"
+                        FontSize="12"
+                        FontWeight="Bold"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="CloseButton_Click"
+                        Visibility="Collapsed">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#F8F9FA"/>
+                                    <Setter Property="Foreground" Value="#DC3545"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+
             <!-- Header -->
-            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,24">
+            <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,24">
                 <!-- Brand -->
                 <Border Background="#007AFF" CornerRadius="6" Padding="12,6" Margin="0,0,0,16" HorizontalAlignment="Center">
                     <TextBlock Text="DEAXO" FontSize="14" FontWeight="Bold" Foreground="White"/>
@@ -97,7 +139,7 @@
             </StackPanel>
 
             <!-- Progress Info -->
-            <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <StackPanel Grid.Row="2" Margin="0,0,0,16">
                 <TextBlock x:Name="StatusText" 
                            Text="Initializing..." 
                            FontSize="14" 
@@ -113,7 +155,7 @@
             </StackPanel>
 
             <!-- Progress Bar -->
-            <StackPanel Grid.Row="2" Margin="0,0,0,20">
+            <StackPanel Grid.Row="3" Margin="0,0,0,20">
                 <ProgressBar x:Name="MainProgressBar" 
                              Style="{StaticResource ModernProgressBarStyle}"
                              Minimum="0" 
@@ -141,57 +183,65 @@
             </StackPanel>
 
             <!-- Status Messages -->
-            <Border Grid.Row="3" 
+            <Border Grid.Row="4" 
                     Background="#FAFBFC" 
                     CornerRadius="8" 
                     BorderBrush="#E9ECEF" 
                     BorderThickness="1"
                     Padding="12"
                     MaxHeight="120">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" 
-                              HorizontalScrollBarVisibility="Disabled">
-                    <TextBlock x:Name="LogText" 
-                               FontSize="11" 
-                               Foreground="#495057" 
-                               FontFamily="Consolas, Courier New"
-                               TextWrapping="Wrap"/>
-                </ScrollViewer>
-            </Border>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-            <!-- Cancel Button -->
-            <Button Grid.Row="4" 
-                    x:Name="CancelButton"
-                    Content="Cancel" 
-                    Width="100" 
-                    Height="36"
-                    Background="#6C757D" 
-                    Foreground="White"
-                    FontSize="13"
-                    FontWeight="Medium"
-                    BorderThickness="0"
-                    Cursor="Hand"
-                    Margin="0,16,0,0"
-                    HorizontalAlignment="Center"
-                    Click="CancelButton_Click">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
-                                CornerRadius="8"
-                                Padding="16,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Button.Template>
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#5A6268"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
+                    <ScrollViewer Grid.Row="0"
+                                  VerticalScrollBarVisibility="Auto" 
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="LogText" 
+                                   FontSize="11" 
+                                   Foreground="#495057" 
+                                   FontFamily="Consolas, Courier New"
+                                   TextWrapping="Wrap"/>
+                    </ScrollViewer>
+
+                    <!-- Cancel Button -->
+                    <Button Grid.Row="1" 
+                            x:Name="CancelButton"
+                            Content="Cancel" 
+                            Width="100" 
+                            Height="36"
+                            Background="#6C757D" 
+                            Foreground="White"
+                            FontSize="13"
+                            FontWeight="Medium"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            Margin="0,12,0,0"
+                            HorizontalAlignment="Center"
+                            Click="CancelButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="8"
+                                        Padding="16,8">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#5A6268"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 

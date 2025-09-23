@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace Deaxo.AutoElevation.UI
@@ -17,6 +18,18 @@ namespace Deaxo.AutoElevation.UI
         public ProgressWindow()
         {
             InitializeComponent();
+
+            // Enable window dragging
+            this.MouseLeftButtonDown += ProgressWindow_MouseLeftButtonDown;
+        }
+
+        private void ProgressWindow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Allow dragging the window by clicking anywhere on it
+            if (e.ButtonState == MouseButtonState.Pressed)
+            {
+                this.DragMove();
+            }
         }
 
         public void UpdateStatus(string status, string detail = null)
@@ -82,12 +95,19 @@ namespace Deaxo.AutoElevation.UI
                 CancelButton.Content = "Close";
                 CancelButton.Background = System.Windows.Media.Brushes.Green;
 
+                // Show close button in title bar
+                CloseButton.Visibility = Visibility.Visible;
+
                 // Add completion log
                 AddLogMessage($"Process completed successfully. Created {results.Count} items.");
 
                 // Stop spinning animation
-                var storyboard = (System.Windows.Media.Animation.Storyboard)FindResource("SpinAnimation");
-                storyboard.Stop();
+                try
+                {
+                    var storyboard = (System.Windows.Media.Animation.Storyboard)FindResource("SpinAnimation");
+                    storyboard?.Stop();
+                }
+                catch { }
             });
         }
 
@@ -102,11 +122,18 @@ namespace Deaxo.AutoElevation.UI
                 CancelButton.Content = "Close";
                 CancelButton.Background = System.Windows.Media.Brushes.Red;
 
+                // Show close button in title bar
+                CloseButton.Visibility = Visibility.Visible;
+
                 AddLogMessage($"ERROR: {error}");
 
                 // Stop spinning animation
-                var storyboard = (System.Windows.Media.Animation.Storyboard)FindResource("SpinAnimation");
-                storyboard.Stop();
+                try
+                {
+                    var storyboard = (System.Windows.Media.Animation.Storyboard)FindResource("SpinAnimation");
+                    storyboard?.Stop();
+                }
+                catch { }
             });
         }
 
@@ -123,6 +150,20 @@ namespace Deaxo.AutoElevation.UI
                 CancelButton.IsEnabled = false;
                 CancelButton.Content = "Cancelling...";
                 AddLogMessage("User requested cancellation...");
+            }
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (CancelButton.Content.ToString() == "Close")
+            {
+                DialogResult = true;
+                Close();
+            }
+            else
+            {
+                // Same as cancel if process is still running
+                CancelButton_Click(sender, e);
             }
         }
 
@@ -145,8 +186,7 @@ namespace Deaxo.AutoElevation.UI
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            // Remove the window from Alt+Tab
-            this.WindowStyle = WindowStyle.ToolWindow;
+            // Don't show in taskbar
             this.ShowInTaskbar = false;
         }
     }
