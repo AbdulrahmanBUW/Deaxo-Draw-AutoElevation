@@ -82,23 +82,57 @@
 
         <!-- Mode buttons in the middle -->
         <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Width="420">
-            <Button Content="Group Elevation"
-                    Style="{StaticResource BlueButton}"
-                    Click="GroupElement_Click"
-                    Margin="0,0,0,12"/>
-            <Button Content="Internal Elevation"
-                    Style="{StaticResource GreenButton}"
-                    Click="InternalElevation_Click"/>
+
+            <!-- Group Elevation -->
+            <Button Style="{StaticResource BlueButton}" Click="GroupElement_Click" Margin="0,0,0,12">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Icon: three stacked rectangles -->
+                    <Viewbox Width="18" Height="18" Margin="0,0,8,0">
+                        <Canvas Width="20" Height="20">
+                            <Rectangle Width="16" Height="4" Stroke="White" StrokeThickness="2"/>
+                            <Rectangle Width="16" Height="4" Stroke="White" StrokeThickness="2" Canvas.Top="6"/>
+                            <Rectangle Width="16" Height="4" Stroke="White" StrokeThickness="2" Canvas.Top="12"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Group Elevation"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Internal Elevation -->
+            <Button Style="{StaticResource GreenButton}" Click="InternalElevation_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Icon: wall + arrow (internal elevation marker style) -->
+                    <Viewbox Width="18" Height="18" Margin="0,0,8,0">
+                        <Canvas Width="20" Height="20">
+                            <!-- wall line -->
+                            <Line X1="4" Y1="2" X2="4" Y2="18" Stroke="White" StrokeThickness="2"/>
+                            <!-- arrow -->
+                            <Polygon Points="8,10 14,6 14,14" Fill="White"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Internal Elevation"/>
+                </StackPanel>
+            </Button>
         </StackPanel>
 
         <!-- Footer: Cancel -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Cancel"
-                    Width="120"
+            <Button Width="120"
                     Height="36"
                     Margin="0,8,0,0"
                     Style="{StaticResource GrayButton}"
-                    Click="Cancel_Click"/>
+                    Click="Cancel_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Icon: X (cancel) -->
+                    <Viewbox Width="14" Height="14" Margin="0,0,6,0">
+                        <Canvas Width="20" Height="20">
+                            <Line X1="4" Y1="4" X2="16" Y2="16" Stroke="White" StrokeThickness="2"/>
+                            <Line X1="16" Y1="4" X2="4" Y2="16" Stroke="White" StrokeThickness="2"/>
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Cancel"/>
+                </StackPanel>
+            </Button>
         </StackPanel>
     </Grid>
 </Window>
