@@ -1,4 +1,4 @@
-﻿// Enhanced GroupElevationCommand.cs with Debug Output
+﻿// Enhanced GroupElevationCommand.cs with Debug Output - UPDATED: No sheet creation
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -108,7 +108,7 @@ namespace Deaxo.AutoElevation.Commands
                 var results = new List<string>();
                 var startTime = DateTime.Now;
 
-                using (Transaction t = new Transaction(doc, "DEAXO - Create Group Elevations"))
+                using (Transaction t = new Transaction(doc, "DEAXO - Create Group Views"))
                 {
                     t.Start();
 
@@ -260,45 +260,16 @@ namespace Deaxo.AutoElevation.Commands
                             return Result.Failed;
                         }
 
-                        // Create sheets
-                        progressWindow.UpdateStatus("Creating sheets...", "Placing views on sheets");
-                        ElementId titleblockTypeId = GetTitleblockTypeId(doc);
-
-                        if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Using titleblock type: {titleblockTypeId}");
-                            int sheetCounter = 1;
-                            foreach (var (type, view) in createdViews)
-                            {
-                                try
-                                {
-                                    CreateSheetForView(doc, type, view, titleblockTypeId, sheetCounter, results);
-                                    sheetCounter++;
-                                    System.Diagnostics.Debug.WriteLine($"Created sheet for {type} view");
-                                }
-                                catch (Exception sheetEx)
-                                {
-                                    var error = $"Failed to create sheet for {type} view: {sheetEx.Message}";
-                                    results.Add(error);
-                                    System.Diagnostics.Debug.WriteLine($"ERROR: {error}");
-                                }
-                            }
-
-                            progressWindow.AddLogMessage($"Created {createdViews.Count} sheets with placed views");
-                        }
-                        else
-                        {
-                            results.Add("Warning: No titleblock found, views created without sheets");
-                            progressWindow.AddLogMessage("Warning: Views created without sheets (no titleblock available)");
-                            System.Diagnostics.Debug.WriteLine("WARNING: No titleblock available for sheet creation");
-                        }
+                        // NOTE: No longer creating sheets - only views as requested
+                        progressWindow.AddLogMessage("Views created successfully (no sheets generated as requested)");
+                        results.Add($"✓ Total: {viewCount} views created without sheets");
 
                         progressWindow.UpdateProgress(10, 10);
                         t.Commit();
 
                         // Show completion
                         var duration = DateTime.Now - startTime;
-                        progressWindow.ShowCompletion(results, "Group Elevations");
+                        progressWindow.ShowCompletion(results, "Group Views");
 
                         System.Diagnostics.Debug.WriteLine($"=== COMMAND COMPLETED SUCCESSFULLY ===");
                         System.Diagnostics.Debug.WriteLine($"Total duration: {duration.TotalSeconds:F1} seconds");
@@ -309,7 +280,7 @@ namespace Deaxo.AutoElevation.Commands
                         progressWindow.Close();
 
                         // Show detailed results window
-                        var resultsWindow = new ResultsWindow(results, "Group Elevations", duration);
+                        var resultsWindow = new ResultsWindow(results, "Group Views", duration);
                         resultsWindow.ShowDialog();
                     }
                     catch (Exception ex)
@@ -336,7 +307,7 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
-        // ... (rest of the methods remain the same)
+        // ... (keep existing helper methods but remove sheet creation methods)
 
         private View GetViewTemplate(Document doc)
         {
@@ -352,7 +323,7 @@ namespace Deaxo.AutoElevation.Commands
             templateNames.Insert(0, "None");
 
             var templateWindow = new SelectFromDictWindow(templateNames,
-                "Select ViewTemplate for Group Elevations", allowMultiple: false);
+                "Select ViewTemplate for Group Views", allowMultiple: false);
             bool? result = templateWindow.ShowDialog();
 
             if (result == true && templateWindow.SelectedItems.Count > 0)
@@ -364,63 +335,6 @@ namespace Deaxo.AutoElevation.Commands
                 }
             }
             return null;
-        }
-
-        private ElementId GetTitleblockTypeId(Document doc)
-        {
-            var titleblockTypeId = doc.GetDefaultFamilyTypeId(new ElementId(BuiltInCategory.OST_TitleBlocks));
-            if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
-                return titleblockTypeId;
-
-            var tb = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol))
-                .OfCategory(BuiltInCategory.OST_TitleBlocks)
-                .Cast<FamilySymbol>()
-                .FirstOrDefault();
-
-            return tb?.Id;
-        }
-
-        private void CreateSheetForView(Document doc, string viewType, View view,
-            ElementId titleblockTypeId, int counter, List<string> results)
-        {
-            try
-            {
-                var sheet = ViewSheet.Create(doc, titleblockTypeId);
-                XYZ pos = new XYZ(0.5, 0.5, 0);
-
-                if (Viewport.CanAddViewToSheet(doc, sheet.Id, view.Id))
-                    Viewport.Create(doc, sheet.Id, view.Id, pos);
-
-                // Use new naming convention: group_elements_view - [Type]
-                string sheetNumber = $"DEAXO_GRP_{viewType}_{counter}_{DateTime.Now:HHmmss}";
-                string sheetName = $"group_elements_view - {viewType} (DEAXO GmbH)";
-
-                SetUniqueSheetName(sheet, sheetNumber, sheetName);
-                results.Add($"{viewType} View -> Sheet:{sheet.Id} View:{view.Id}");
-            }
-            catch (Exception ex)
-            {
-                results.Add($"Failed to create sheet for {viewType} view: {ex.Message}");
-            }
-        }
-
-        private void SetUniqueSheetName(ViewSheet sheet, string baseNumber, string baseName)
-        {
-            string sheetNumber = baseNumber;
-            for (int i = 0; i < 10; i++)
-            {
-                try
-                {
-                    sheet.SheetNumber = sheetNumber;
-                    sheet.Name = baseName;
-                    break;
-                }
-                catch
-                {
-                    sheetNumber += "*";
-                }
-            }
         }
     }
 }

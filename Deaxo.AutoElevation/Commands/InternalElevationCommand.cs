@@ -20,7 +20,6 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                // Categories for walls and curtain walls only
                 var selectOpts = new Dictionary<string, object>()
                 {
                     {"Walls", BuiltInCategory.OST_Walls},
@@ -40,13 +39,12 @@ namespace Deaxo.AutoElevation.Commands
                         allowedTypesOrCats.Add(val);
                 }
 
-                // Selection with proper filter
                 var selFilter = new DXSelectionFilter(allowedTypesOrCats);
                 IList<Reference> refs;
                 try
                 {
                     refs = uidoc.Selection.PickObjects(ObjectType.Element, selFilter,
-                        "Select walls or curtain walls for internal elevations and click Finish");
+                        "Select walls for internal building elevations and click Finish");
                 }
                 catch (OperationCanceledException)
                 {
@@ -60,73 +58,76 @@ namespace Deaxo.AutoElevation.Commands
                     return Result.Cancelled;
                 }
 
-                // Get view template
                 View chosenTemplate = GetViewTemplate(doc);
 
-                // Create internal elevations
+                var progressWindow = new ProgressWindow();
+                progressWindow.Show();
+                progressWindow.UpdateStatus("Creating internal building elevations...", "Processing selected walls");
+
                 var results = new List<string>();
-                using (Transaction t = new Transaction(doc, "DEAXO - Create Internal Elevations"))
+                var startTime = DateTime.Now;
+
+                using (Transaction t = new Transaction(doc, "DEAXO - Create Internal Building Elevations"))
                 {
                     t.Start();
 
-                    foreach (var r in refs)
+                    try
                     {
-                        try
+                        progressWindow.UpdateProgress(0, refs.Count);
+
+                        for (int i = 0; i < refs.Count; i++)
                         {
-                            Element el = doc.GetElement(r);
+                            var r = refs[i];
 
-                            // Validate element type
-                            if (!(el is Wall wall))
+                            try
                             {
-                                results.Add($"Skipped element {el.Id}: Not a wall (Type: {el.GetType().Name})");
-                                continue;
-                            }
+                                Element el = doc.GetElement(r);
+                                progressWindow.UpdateStatus($"Processing wall {i + 1} of {refs.Count}...",
+                                    $"Wall ID: {el.Id}");
 
-                            // Get element properties
-                            var props = new ElementProperties(doc, el);
-                            if (!props.IsValid)
+                                if (!(el is Wall wall))
+                                {
+                                    results.Add($"Skipped element {el.Id}: Not a wall (Type: {el.GetType().Name})");
+                                    continue;
+                                }
+
+                                var elevation = CreateInternalBuildingElevation(doc, wall, chosenTemplate);
+                                if (elevation == null)
+                                {
+                                    results.Add($"Failed to create building elevation for wall {el.Id}");
+                                    continue;
+                                }
+
+                                results.Add($"✓ Created building elevation {elevation.Id} for wall {el.Id}");
+
+                                progressWindow.UpdateProgress(i + 1, refs.Count);
+                                progressWindow.AddLogMessage($"Created building elevation for wall {wall.Id}");
+                            }
+                            catch (Exception exInner)
                             {
-                                results.Add($"Skipped wall {el.Id}: Invalid properties (W={props.Width:F1}, H={props.Height:F1}, D={props.Depth:F1})");
-                                continue;
+                                var error = $"Error processing wall {r.ElementId}: {exInner.Message}";
+                                results.Add($"✗ {error}");
                             }
-
-                            // Log processing details
-                            results.Add($"Processing wall {el.Id}: W={props.Width:F1}, H={props.Height:F1}, D={props.Depth:F1}");
-
-                            // Create internal elevation
-                            var created = SectionGenerator.CreateInternalElevation(doc, props);
-                            if (created?.elevation == null)
-                            {
-                                results.Add($"Failed to create elevation for wall {el.Id}");
-                                continue;
-                            }
-
-                            var elev = created.elevation;
-                            results.Add($"Successfully created elevation view {elev.Id} for wall {el.Id}");
-
-                            // Apply view template
-                            if (chosenTemplate != null)
-                            {
-                                elev.ViewTemplateId = chosenTemplate.Id;
-                                results.Add($"Applied view template to elevation {elev.Id}");
-                            }
-
-                            // Create sheet
-                            CreateSheetForElevation(doc, elev, props, results);
                         }
-                        catch (Exception exInner)
-                        {
-                            results.Add($"Error processing wall {r.ElementId}: {exInner.Message}");
-                        }
+
+                        t.Commit();
+
+                        var duration = DateTime.Now - startTime;
+                        progressWindow.ShowCompletion(results, "Internal Building Elevations");
+
+                        System.Threading.Thread.Sleep(1500);
+                        progressWindow.Close();
+
+                        var resultsWindow = new ResultsWindow(results, "Internal Building Elevations", duration);
+                        resultsWindow.ShowDialog();
                     }
-
-                    t.Commit();
+                    catch (Exception ex)
+                    {
+                        progressWindow.ShowError($"Error in internal elevation command: {ex.Message}");
+                        t.RollBack();
+                        throw;
+                    }
                 }
-
-                // Show results
-                var msgText = string.Join(Environment.NewLine, results.Take(100));
-                TaskDialog.Show("DEAXO - Internal Elevations Created",
-                    string.IsNullOrWhiteSpace(msgText) ? "No new internal elevations created." : msgText);
 
                 return Result.Succeeded;
             }
@@ -134,6 +135,231 @@ namespace Deaxo.AutoElevation.Commands
             {
                 message = ex.Message;
                 return Result.Failed;
+            }
+        }
+
+        private ViewSection CreateInternalBuildingElevation(Document doc, Wall wall, View viewTemplate)
+        {
+            try
+            {
+                var locationCurve = wall.Location as LocationCurve;
+                if (locationCurve?.Curve == null)
+                {
+                    return null;
+                }
+
+                var curve = locationCurve.Curve;
+                var startPoint = curve.GetEndPoint(0);
+                var endPoint = curve.GetEndPoint(1);
+                var wallCenter = (startPoint + endPoint) / 2;
+                var wallDirection = (endPoint - startPoint).Normalize();
+
+                var wallNormal = new XYZ(-wallDirection.Y, wallDirection.X, 0).Normalize();
+                if (wall.Flipped) wallNormal = -wallNormal;
+
+                var elevation = CreateBuildingElevationView(doc, wall, wallCenter, wallNormal, viewTemplate);
+                if (elevation == null)
+                {
+                    return null;
+                }
+
+                string wallTypeName = GetWallTypeName(wall);
+                string elevationName = $"{wallTypeName}_IE";
+                SetUniqueViewName(elevation, elevationName);
+
+                return elevation;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+
+        private ViewSection CreateBuildingElevationView(Document doc, Wall wall, XYZ wallCenter, XYZ wallNormal, View viewTemplate)
+        {
+            try
+            {
+                var elevationViewType = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewFamilyType))
+                    .Cast<ViewFamilyType>()
+                    .FirstOrDefault(vt => vt.ViewFamily == ViewFamily.Elevation);
+                if (elevationViewType == null) return null;
+
+                var internalDirection = -wallNormal;
+                double safeDistance = 8.0;
+                var markerPosition = wallCenter + (internalDirection * safeDistance);
+
+                BoundingBoxXYZ wallBox = wall.get_BoundingBox(null);
+                if (wallBox == null) return null;
+
+                double midZ = (wallBox.Min.Z + wallBox.Max.Z) / 2.0;
+                markerPosition = new XYZ(markerPosition.X, markerPosition.Y, midZ);
+
+                // create marker (we will create up to 4 views using this marker)
+                var elevationMarker = ElevationMarker.CreateElevationMarker(doc, elevationViewType.Id, markerPosition, 100);
+                if (elevationMarker == null) return null;
+
+                ElementId ownerViewId = ElementId.InvalidElementId;
+                if (doc.ActiveView?.ViewType == ViewType.FloorPlan ||
+                    doc.ActiveView?.ViewType == ViewType.CeilingPlan ||
+                    doc.ActiveView?.ViewType == ViewType.AreaPlan)
+                {
+                    ownerViewId = doc.ActiveView.Id;
+                }
+                else
+                {
+                    var planView = new FilteredElementCollector(doc)
+                        .OfClass(typeof(ViewPlan))
+                        .Cast<ViewPlan>()
+                        .FirstOrDefault(v => !v.IsTemplate && v.ViewType == ViewType.FloorPlan);
+                    if (planView != null) ownerViewId = planView.Id;
+                }
+
+                // desired direction in XY plane
+                var desired2D = new XYZ(-wallNormal.X, -wallNormal.Y, 0);
+                if (desired2D.IsZeroLength())
+                {
+                    desired2D = new XYZ(0, 1, 0); // fallback
+                }
+                desired2D = desired2D.Normalize();
+
+                ViewSection chosenView = null;
+                double bestAngle = double.MaxValue;
+                var createdViewIds = new List<ElementId>();
+
+                // Try all 4 indices and pick best matching view direction
+                for (int idx = 0; idx < 4; idx++)
+                {
+                    var v = elevationMarker.CreateElevation(doc, ownerViewId, idx) as ViewSection;
+                    if (v == null) continue;
+
+                    createdViewIds.Add(v.Id);
+
+                    // compute horizontal angle between v.ViewDirection and desired2D
+                    var cur2D = new XYZ(v.ViewDirection.X, v.ViewDirection.Y, 0);
+                    if (cur2D.IsZeroLength()) continue;
+                    cur2D = cur2D.Normalize();
+
+                    // clamp dot to [-1,1] to avoid NaN from rounding
+                    double dot = Math.Max(-1.0, Math.Min(1.0, cur2D.X * desired2D.X + cur2D.Y * desired2D.Y));
+                    double angle = Math.Acos(dot); // angle in radians (0..PI)
+                    double absAngle = Math.Abs(angle);
+
+                    if (absAngle < bestAngle)
+                    {
+                        bestAngle = absAngle;
+                        chosenView = v;
+                    }
+                }
+
+                if (chosenView == null)
+                {
+                    // cleanup any created views and return
+                    foreach (var id in createdViewIds) { if (id != ElementId.InvalidElementId) doc.Delete(id); }
+                    return null;
+                }
+
+                // delete the other created views (keep the chosen one)
+                foreach (var id in createdViewIds)
+                {
+                    if (id != chosenView.Id)
+                    {
+                        try { doc.Delete(id); } catch { /* ignore */ }
+                    }
+                }
+
+                // Now proceed to set crop, template, properties on the chosen view
+                SetElevationCropRegion(chosenView, wall);
+
+                if (viewTemplate != null)
+                {
+                    try
+                    {
+                        chosenView.ViewTemplateId = viewTemplate.Id;
+                    }
+                    catch { }
+                }
+
+                SetElevationViewProperties(chosenView, wall);
+
+                return chosenView;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+
+        private void SetElevationViewProperties(ViewSection elevationView, Wall wall)
+        {
+            try
+            {
+                elevationView.DetailLevel = ViewDetailLevel.Fine;
+                if (elevationView.Scale > 100)
+                {
+                    elevationView.Scale = 50;
+                }
+                elevationView.CropBoxActive = true;
+                elevationView.CropBoxVisible = true;
+            }
+            catch { }
+        }
+
+        private void SetElevationCropRegion(ViewSection elevation, Wall wall)
+        {
+            try
+            {
+                var wallBounds = wall.get_BoundingBox(null);
+                if (wallBounds == null) return;
+
+                var locationCurve = wall.Location as LocationCurve;
+                if (locationCurve?.Curve == null) return;
+
+                double wallLength = locationCurve.Curve.Length;
+                double wallHeight = wallBounds.Max.Z - wallBounds.Min.Z;
+
+                double horizontalPadding = 2.0;
+                double verticalPadding = 2.0;
+                double cropDepth = 10.0;
+
+                var cropBox = new BoundingBoxXYZ
+                {
+                    Min = new XYZ(-horizontalPadding, -cropDepth, -verticalPadding),
+                    Max = new XYZ(wallLength + horizontalPadding, 0, wallHeight + verticalPadding),
+                    Transform = elevation.CropBox.Transform
+                };
+
+                using (Transaction cropTx = new Transaction(elevation.Document, "Set Crop Region"))
+                {
+                    cropTx.Start();
+                    elevation.CropBox = cropBox;
+                    elevation.CropBoxActive = true;
+                    elevation.CropBoxVisible = true;
+                    cropTx.Commit();
+                }
+            }
+            catch { }
+        }
+
+        private string GetWallTypeName(Wall wall)
+        {
+            try
+            {
+                var wallType = wall.Document.GetElement(wall.GetTypeId()) as WallType;
+                if (wallType != null)
+                {
+                    var nameParam = wallType.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM);
+                    if (nameParam != null && nameParam.HasValue)
+                    {
+                        return nameParam.AsString().Replace(" ", "-");
+                    }
+                }
+                return $"Wall-{wall.Id}";
+            }
+            catch
+            {
+                return $"Wall-{wall.Id}";
             }
         }
 
@@ -151,7 +377,7 @@ namespace Deaxo.AutoElevation.Commands
             templateNames.Insert(0, "None");
 
             var templateWindow = new SelectFromDictWindow(templateNames,
-                "Select ViewTemplate for Internal Elevations", allowMultiple: false);
+                "Select ViewTemplate for Internal Building Elevations", allowMultiple: false);
             bool? result = templateWindow.ShowDialog();
 
             if (result == true && templateWindow.SelectedItems.Count > 0)
@@ -165,19 +391,17 @@ namespace Deaxo.AutoElevation.Commands
             return null;
         }
 
-        private void CreateSheetForElevation(Document doc, ViewSection elevation, ElementProperties props, List<string> results)
+        private void CreateSheetForElevation(Document doc, ViewSection elevation, Wall wall, List<string> results)
         {
             try
             {
-                // Get titleblock
                 ElementId titleblockTypeId = GetTitleblockTypeId(doc);
                 if (titleblockTypeId == null || titleblockTypeId == ElementId.InvalidElementId)
                 {
-                    results.Add($"No titleblock available for wall {props.Element.Id}");
+                    results.Add($"Warning: No titleblock available for wall {wall.Id}");
                     return;
                 }
 
-                // Create sheet
                 var sheet = ViewSheet.Create(doc, titleblockTypeId);
                 XYZ pos = new XYZ(0.5, 0.5, 0);
 
@@ -191,17 +415,16 @@ namespace Deaxo.AutoElevation.Commands
                     results.Add($"Failed to place elevation {elevation.Id} on sheet: {ex.Message}");
                 }
 
-                // Name sheet uniquely
-                string typeName = props.TypeName ?? props.Element.Category?.Name ?? "Wall";
-                string sheetNumber = $"DEAXO_IE_{typeName}_{props.Element.Id}";
-                string sheetName = $"{props.Element.Category?.Name} - Internal Elevation (DEAXO GmbH)";
+                string wallTypeName = GetWallTypeName(wall);
+                string sheetNumber = $"DEAXO_IE_{wallTypeName}_{wall.Id}";
+                string sheetName = $"{wall.Category?.Name} - Internal Building Elevation (DEAXO GmbH)";
 
                 SetUniqueSheetName(sheet, sheetNumber, sheetName);
-                results.Add($"Wall {props.Element.Id} -> Sheet:{sheet.Id} Internal Elevation:{elevation.Id}");
+                results.Add($"✓ Created sheet {sheet.Id} for building elevation {elevation.Id}");
             }
             catch (Exception ex)
             {
-                results.Add($"Failed to create sheet for wall {props.Element.Id}: {ex.Message}");
+                results.Add($"Failed to create sheet for wall {wall.Id}: {ex.Message}");
             }
         }
 
@@ -237,21 +460,24 @@ namespace Deaxo.AutoElevation.Commands
                 }
             }
         }
-    }
 
-    /// <summary>
-    /// Custom selection filter for walls only - simplified and reliable
-    /// </summary>
-    public class WallSelectionFilter : ISelectionFilter
-    {
-        public bool AllowElement(Element elem)
+        private void SetUniqueViewName(ViewSection view, string baseName)
         {
-            return elem != null && !elem.ViewSpecific && elem is Wall;
-        }
+            if (view == null) return;
 
-        public bool AllowReference(Reference reference, XYZ position)
-        {
-            return true;
+            string viewName = baseName;
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    view.Name = viewName;
+                    break;
+                }
+                catch
+                {
+                    viewName = $"{baseName}_{i + 1}";
+                }
+            }
         }
     }
 }

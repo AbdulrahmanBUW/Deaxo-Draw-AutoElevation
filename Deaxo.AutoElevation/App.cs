@@ -22,24 +22,42 @@ namespace Deaxo.AutoElevation
                 // Create Ribbon panel
                 RibbonPanel panel = application.CreateRibbonPanel(tabName, "Auto Elevation");
 
-                // PushButton data - Keep the original command name for compatibility
+                // Get assembly path
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
-                PushButtonData buttonData = new PushButtonData(
-                    "AutoElevation",
-                    "Auto Elevation",
+
+                // Button 1: Internal Elevations (uses existing icons)
+                PushButtonData internalButtonData = new PushButtonData(
+                    "InternalElevation",
+                    "Internal Elevation",
                     assemblyPath,
-                    "Deaxo.AutoElevation.Commands.AutoElevationCommand"  // Keep original class name
+                    "Deaxo.AutoElevation.Commands.InternalElevationCommand"
                 )
                 {
-                    ToolTip = "Automatically create elevations for selected elements with multiple modes",
+                    ToolTip = "Create building elevations for internal views of selected walls",
                 };
 
-                // Load large and small icons
-                buttonData.LargeImage = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon32.png");
-                buttonData.Image = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon16.png");
+                // Load existing icons for Internal Elevations
+                internalButtonData.LargeImage = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon32.png");
+                internalButtonData.Image = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.icon16.png");
 
-                // Add button to panel
-                panel.AddItem(buttonData);
+                // Button 2: Group Views (uses new group icons)
+                PushButtonData groupButtonData = new PushButtonData(
+                    "GroupViews",
+                    "Group Views",
+                    assemblyPath,
+                    "Deaxo.AutoElevation.Commands.GroupElevationCommand"
+                )
+                {
+                    ToolTip = "Create group elevation views (6 orthographic views + 3D) for selected elements",
+                };
+
+                // Load new group icons
+                groupButtonData.LargeImage = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.Group_Icon-32.png");
+                groupButtonData.Image = LoadBitmapFromEmbeddedResource("Deaxo.AutoElevation.Resources.Group_Icon-16.png");
+
+                // Add buttons to panel
+                panel.AddItem(internalButtonData);
+                panel.AddItem(groupButtonData);
 
                 return Result.Succeeded;
             }
