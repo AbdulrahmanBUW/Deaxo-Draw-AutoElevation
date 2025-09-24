@@ -68,11 +68,11 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Enhanced CheckBox Style -->
-        <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
+        <!-- Enhanced RadioButton Style for Single Selection -->
+        <Style x:Key="ModernRadioButtonStyle" TargetType="RadioButton">
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
+                    <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="border"
                                 Background="#FFFFFF"
                                 CornerRadius="10"
@@ -82,20 +82,19 @@
                                 BorderThickness="1"
                                 SnapsToDevicePixels="True">
                             <StackPanel Orientation="Horizontal">
-                                <Border x:Name="checkBorder" 
+                                <Border x:Name="radioBorder" 
                                         Width="20" Height="20" 
-                                        CornerRadius="4"
+                                        CornerRadius="10"
                                         BorderBrush="#CED4DA" 
                                         BorderThickness="2"
                                         Background="White"
                                         Margin="0,0,12,0">
-                                    <Path x:Name="checkMark"
-                                          Data="M 0 6 L 4 10 L 12 2"
-                                          Stroke="White"
-                                          StrokeThickness="2.5"
-                                          Visibility="Collapsed"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
+                                    <Ellipse x:Name="radioMark"
+                                             Width="8" Height="8"
+                                             Fill="White"
+                                             Visibility="Collapsed"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"/>
                                 </Border>
                                 <ContentPresenter VerticalAlignment="Center" 
                                                 TextBlock.FontSize="14"
@@ -110,10 +109,43 @@
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#E3F2FD"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#007AFF"/>
-                                <Setter TargetName="checkBorder" Property="Background" Value="#007AFF"/>
-                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="#007AFF"/>
-                                <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="radioBorder" Property="Background" Value="#007AFF"/>
+                                <Setter TargetName="radioBorder" Property="BorderBrush" Value="#007AFF"/>
+                                <Setter TargetName="radioMark" Property="Visibility" Value="Visible"/>
                                 <Setter Property="Foreground" Value="#007AFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Search TextBox Style -->
+        <Style x:Key="SearchBoxStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E9ECEF"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Foreground" Value="#212529"/>
+            <Setter Property="CaretBrush" Value="#007AFF"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="10"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ScrollViewer x:Name="PART_ContentHost" 
+                                          Focusable="false"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#007AFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -155,7 +187,7 @@
                 <TextBlock x:Name="TitleText" Style="{StaticResource HeaderStyle}" HorizontalAlignment="Center"/>
             </StackPanel>
 
-            <!-- Instructions and Controls -->
+            <!-- Instructions and Search -->
             <Grid Grid.Row="1" Margin="0,0,0,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -164,27 +196,58 @@
 
                 <!-- Instructions -->
                 <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                    <TextBlock Text="Select the view templates you want to apply to your elevation views:" 
+                    <TextBlock Text="Select a view template to apply to your elevation views:" 
                                Style="{StaticResource SubheaderStyle}" 
                                TextWrapping="Wrap"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="💡 Templates help maintain consistent formatting across all generated views" 
+                    <TextBlock Text="Templates help maintain consistent formatting across all generated views" 
                                FontSize="12" 
                                Foreground="#6C757D" 
                                FontStyle="Italic"/>
                 </StackPanel>
 
-                <!-- Quick Actions -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
-                    <Button Content="Select All" 
-                            Width="110" 
-                            Style="{StaticResource SecondaryButtonStyle}" 
-                            Margin="0,0,12,0"
-                            Click="SelectAll_Click"/>
-                    <Button Content="Deselect All" 
-                            Width="130" 
-                            Style="{StaticResource SecondaryButtonStyle}"
-                            Click="DeselectAll_Click"/>
+                <!-- Search Box -->
+                <StackPanel Grid.Row="1">
+                    <TextBlock Text="Search Templates:" FontSize="12" FontWeight="Medium" Foreground="#495057" Margin="0,0,0,8"/>
+                    <Grid>
+                        <TextBox x:Name="SearchBox" 
+                 Height="44"
+                 FontSize="14"
+                 Padding="16,12"
+                 Background="White"
+                 Foreground="#212529"
+                 BorderBrush="#E9ECEF"
+                 BorderThickness="2"
+                 TextChanged="SearchBox_TextChanged"
+                 GotFocus="SearchBox_GotFocus"
+                 LostFocus="SearchBox_LostFocus">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="TextBox">
+                                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="10"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}">
+                                                    <ScrollViewer x:Name="PART_ContentHost" 
+                                                  Focusable="false"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+                        <TextBlock x:Name="PlaceholderText"
+                   Text="Type to search templates..."
+                   FontStyle="Italic" 
+                   Foreground="#ADB5BD" 
+                   IsHitTestVisible="False"
+                   Margin="18,14"
+                   VerticalAlignment="Center"/>
+                    </Grid>
                 </StackPanel>
             </Grid>
 
@@ -194,26 +257,21 @@
                     CornerRadius="8" 
                     BorderBrush="#E9ECEF" 
                     BorderThickness="1"
-                    Padding="8">
+                    Padding="8"
+                    Margin="0,16,0,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" 
                               HorizontalScrollBarVisibility="Disabled">
-                    <ListBox x:Name="OptionsList" 
-                             BorderThickness="0" 
-                             Background="Transparent"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
+                    <ItemsControl x:Name="OptionsList">
+                        <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <CheckBox Content="{Binding}" 
-                                          Style="{StaticResource ModernCheckBoxStyle}"
-                                          Width="350"/>
+                                <RadioButton Content="{Binding}" 
+                                            Style="{StaticResource ModernRadioButtonStyle}"
+                                            GroupName="TemplateSelection"
+                                            Margin="4"
+                                            Checked="RadioButton_Checked"/>
                             </DataTemplate>
-                        </ListBox.ItemTemplate>
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                    </ListBox>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </ScrollViewer>
             </Border>
 
@@ -227,7 +285,7 @@
                 <!-- Status Text -->
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock x:Name="StatusText" 
-                               Text="Select templates to continue" 
+                               Text="Select a template or continue with default formatting" 
                                FontSize="12" 
                                Foreground="#6C757D"/>
                 </StackPanel>

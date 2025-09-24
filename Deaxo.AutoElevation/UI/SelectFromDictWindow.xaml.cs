@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,91 +11,118 @@ namespace Deaxo.AutoElevation.UI
     {
         public List<string> SelectedItems { get; private set; } = new List<string>();
         private readonly bool allowMultiple;
+        private readonly List<string> allOptions;
+        private readonly ObservableCollection<string> filteredOptions;
 
-        public SelectFromDictWindow(List<string> options, string title, bool allowMultiple)
+        public SelectFromDictWindow(List<string> options, string title, bool allowMultiple = false)
         {
             InitializeComponent();
-            this.allowMultiple = allowMultiple;
+            this.allowMultiple = false; // Force single selection only
+            this.allOptions = options ?? new List<string>();
+            this.filteredOptions = new ObservableCollection<string>(allOptions);
 
             // Set window title and header
             Title = $"DEAXO Auto Elevation - {title}";
             TitleText.Text = title;
 
-            // Bind options to ListBox
-            OptionsList.ItemsSource = options;
+            // Bind filtered options to ListBox
+            OptionsList.ItemsSource = filteredOptions;
 
-            // Update status text based on mode
-            if (allowMultiple)
-            {
-                StatusText.Text = "Select one or more templates (or none for default formatting)";
-            }
-            else
-            {
-                StatusText.Text = "Select one template (or none for default formatting)";
-            }
+            // Update status text for single selection
+            StatusText.Text = "Select one template or continue with default formatting";
 
-            // Hook up selection changed event to update status
-            OptionsList.SelectionChanged += OptionsList_SelectionChanged;
+            // Initialize placeholder visibility
+            UpdatePlaceholder();
         }
 
-        private void OptionsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            FilterOptions();
+            UpdatePlaceholder();
+        }
+
+        private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            UpdatePlaceholder();
+        }
+
+        private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            UpdatePlaceholder();
+        }
+
+        private void UpdatePlaceholder()
+        {
+            if (PlaceholderText != null)
+            {
+                PlaceholderText.Visibility = string.IsNullOrEmpty(SearchBox.Text) && !SearchBox.IsFocused
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+        }
+
+        private void FilterOptions()
+        {
+            string searchText = SearchBox.Text?.ToLower() ?? string.Empty;
+
+            filteredOptions.Clear();
+
+            var filtered = string.IsNullOrWhiteSpace(searchText)
+                ? allOptions
+                : allOptions.Where(option => option.ToLower().Contains(searchText));
+
+            foreach (var option in filtered)
+            {
+                filteredOptions.Add(option);
+            }
+
+            UpdateStatusText();
+        }
+
+        private void RadioButton_Checked(object sender, RoutedEventArgs e)
         {
             UpdateStatusText();
         }
 
         private void UpdateStatusText()
         {
-            int selectedCount = GetSelectedCount();
+            var selectedTemplate = GetSelectedTemplate();
 
-            if (selectedCount == 0)
+            if (string.IsNullOrEmpty(selectedTemplate) || selectedTemplate == "None")
             {
-                StatusText.Text = allowMultiple ?
-                    "No templates selected - default formatting will be used" :
-                    "No template selected - default formatting will be used";
-            }
-            else if (selectedCount == 1)
-            {
-                StatusText.Text = "1 template selected";
+                StatusText.Text = "No template selected - default formatting will be used";
             }
             else
             {
-                StatusText.Text = $"{selectedCount} templates selected";
+                StatusText.Text = $"Selected: {selectedTemplate}";
             }
         }
 
-        private int GetSelectedCount()
+        private string GetSelectedTemplate()
         {
-            int count = 0;
-            foreach (var item in OptionsList.Items)
+            foreach (var item in filteredOptions)
             {
+                // Find the RadioButton for this item
                 var container = OptionsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
                 if (container != null)
                 {
-                    var checkBox = FindChild<CheckBox>(container);
-                    if (checkBox != null && checkBox.IsChecked == true)
-                        count++;
+                    var radioButton = FindChild<RadioButton>(container);
+                    if (radioButton != null && radioButton.IsChecked == true)
+                        return item;
                 }
             }
-            return count;
+            return null;
         }
 
         private void Ok_Click(object sender, RoutedEventArgs e)
         {
             SelectedItems.Clear();
-            foreach (var item in OptionsList.Items)
-            {
-                var container = OptionsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
-                if (container != null)
-                {
-                    var checkBox = FindChild<CheckBox>(container);
-                    if (checkBox != null && checkBox.IsChecked == true)
-                        SelectedItems.Add(item.ToString());
-                }
-            }
 
-            // Enforce single selection if not allowing multiple
-            if (!allowMultiple && SelectedItems.Count > 1)
-                SelectedItems = SelectedItems.Take(1).ToList();
+            var selectedTemplate = GetSelectedTemplate();
+            if (!string.IsNullOrEmpty(selectedTemplate))
+            {
+                SelectedItems.Add(selectedTemplate);
+            }
 
             DialogResult = true;
             Close();
@@ -106,33 +134,7 @@ namespace Deaxo.AutoElevation.UI
             Close();
         }
 
-        private void SelectAll_Click(object sender, RoutedEventArgs e)
-        {
-            SetAllCheckboxes(true);
-            UpdateStatusText();
-        }
-
-        private void DeselectAll_Click(object sender, RoutedEventArgs e)
-        {
-            SetAllCheckboxes(false);
-            UpdateStatusText();
-        }
-
-        private void SetAllCheckboxes(bool isChecked)
-        {
-            foreach (var item in OptionsList.Items)
-            {
-                var container = OptionsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
-                if (container != null)
-                {
-                    var checkBox = FindChild<CheckBox>(container);
-                    if (checkBox != null)
-                        checkBox.IsChecked = isChecked;
-                }
-            }
-        }
-
-        // Recursive search for child CheckBox
+        // Recursive search for child RadioButton
         private T FindChild<T>(DependencyObject parent) where T : DependencyObject
         {
             if (parent == null) return null;

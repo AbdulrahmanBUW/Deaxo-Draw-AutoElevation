@@ -275,13 +275,13 @@ namespace Deaxo.AutoElevation.Commands
                         System.Diagnostics.Debug.WriteLine($"Total duration: {duration.TotalSeconds:F1} seconds");
                         System.Diagnostics.Debug.WriteLine($"Final result count: {results.Count} messages");
 
-                        // Wait a moment then show detailed results
+                        // Wait a moment then close - Results window display removed as requested
                         System.Threading.Thread.Sleep(1500);
                         progressWindow.Close();
 
-                        // Show detailed results window
-                        var resultsWindow = new ResultsWindow(results, "Group Views", duration);
-                        resultsWindow.ShowDialog();
+                        // Results window display removed as requested
+                        // var resultsWindow = new ResultsWindow(results, "Group Views", duration);
+                        // resultsWindow.ShowDialog();
                     }
                     catch (Exception ex)
                     {
@@ -322,6 +322,7 @@ namespace Deaxo.AutoElevation.Commands
             var templateNames = viewTemplates.Select(v => v.Name).ToList();
             templateNames.Insert(0, "None");
 
+            // Updated: Single selection only with search functionality
             var templateWindow = new SelectFromDictWindow(templateNames,
                 "Select ViewTemplate for Group Views", allowMultiple: false);
             bool? result = templateWindow.ShowDialog();
