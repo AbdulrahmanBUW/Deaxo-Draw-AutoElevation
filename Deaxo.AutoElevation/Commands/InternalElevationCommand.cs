@@ -316,31 +316,70 @@ namespace Deaxo.AutoElevation.Commands
                 var locationCurve = wall.Location as LocationCurve;
                 if (locationCurve?.Curve == null) return;
 
-                double wallLength = locationCurve.Curve.Length;
-                double wallHeight = wallBounds.Max.Z - wallBounds.Min.Z;
+                // paddings you can tweak
+                double horizontalPadding = 0.0; // left/right in view X
+                double verticalPadding = 0.0;   // top/bottom in view Z
+                                                // depth of crop box (how far into the model the view looks)
+                double cropDepth = Math.Max(0.1, wall.Width);
 
-                double horizontalPadding = 2.0;
-                double verticalPadding = 2.0;
-                double cropDepth = 10.0;
+                // Use current crop transform if available; otherwise use view's default
+                var currentCropBox = elevation.CropBox ?? new BoundingBoxXYZ();
+                Transform cropTransform = currentCropBox.Transform ?? elevation.CropBox.Transform;
+                if (cropTransform == null)
+                {
+                    // As a fallback, use the view orientation to build a transform (rare)
+                    cropTransform = Transform.Identity;
+                }
+
+                // Inverse transform: world -> crop-local
+                Transform inv = null;
+                try { inv = cropTransform.Inverse; }
+                catch { inv = Transform.Identity; }
+
+                // Wall endpoints in world coordinates
+                XYZ p0 = locationCurve.Curve.GetEndPoint(0);
+                XYZ p1 = locationCurve.Curve.GetEndPoint(1);
+
+                // Convert wall endpoints and bounding box Z extents to crop-local coords
+                XYZ p0Local = inv.OfPoint(p0);
+                XYZ p1Local = inv.OfPoint(p1);
+
+                XYZ wallMinWorld = wallBounds.Min;
+                XYZ wallMaxWorld = wallBounds.Max;
+                XYZ wallMinLocal = inv.OfPoint(wallMinWorld);
+                XYZ wallMaxLocal = inv.OfPoint(wallMaxWorld);
+
+                // Determine X range from endpoints (in local coords)
+                double xMin = Math.Min(p0Local.X, p1Local.X) - horizontalPadding;
+                double xMax = Math.Max(p0Local.X, p1Local.X) + horizontalPadding;
+
+                // Y range centered around 0 with depth (some families put marker Y offset; center is safe)
+                double yMin = -cropDepth * 0.5;
+                double yMax = cropDepth * 0.5;
+
+                // Z range from transformed wall bounding box
+                double zMin = Math.Min(wallMinLocal.Z, wallMaxLocal.Z) - verticalPadding;
+                double zMax = Math.Max(wallMinLocal.Z, wallMaxLocal.Z) + verticalPadding;
 
                 var cropBox = new BoundingBoxXYZ
                 {
-                    Min = new XYZ(-horizontalPadding, -cropDepth, -verticalPadding),
-                    Max = new XYZ(wallLength + horizontalPadding, 0, wallHeight + verticalPadding),
-                    Transform = elevation.CropBox.Transform
+                    Min = new XYZ(xMin, yMin, zMin),
+                    Max = new XYZ(xMax, yMax, zMax),
+                    Transform = cropTransform
                 };
 
-                using (Transaction cropTx = new Transaction(elevation.Document, "Set Crop Region"))
-                {
-                    cropTx.Start();
-                    elevation.CropBox = cropBox;
-                    elevation.CropBoxActive = true;
-                    elevation.CropBoxVisible = true;
-                    cropTx.Commit();
-                }
+                // Assign crop box to view (inside outer transaction)
+                elevation.CropBox = cropBox;
+                elevation.CropBoxActive = true;
+                elevation.CropBoxVisible = true;
             }
-            catch { }
+            catch
+            {
+                // swallow or log; keep overall process robust
+            }
         }
+
+
 
         private string GetWallTypeName(Wall wall)
         {
