@@ -316,66 +316,68 @@ namespace Deaxo.AutoElevation.Commands
                 var locationCurve = wall.Location as LocationCurve;
                 if (locationCurve?.Curve == null) return;
 
-                // paddings you can tweak
-                double horizontalPadding = 0.0; // left/right in view X
-                double verticalPadding = 0.0;   // top/bottom in view Z
-                                                // depth of crop box (how far into the model the view looks)
-                double cropDepth = Math.Max(0.1, wall.Width);
+                // Calculate dimensions directly from bounding box (like group elevations do)
+                var center = (wallBounds.Min + wallBounds.Max) / 2;
+                var size = wallBounds.Max - wallBounds.Min;
 
-                // Use current crop transform if available; otherwise use view's default
-                var currentCropBox = elevation.CropBox ?? new BoundingBoxXYZ();
-                Transform cropTransform = currentCropBox.Transform ?? elevation.CropBox.Transform;
-                if (cropTransform == null)
-                {
-                    // As a fallback, use the view orientation to build a transform (rare)
-                    cropTransform = Transform.Identity;
-                }
+                // Use actual dimensions from bounding box (like group elevation approach)
+                double width = Math.Max(size.X, 10.0);   // Wall length direction
+                double depth = Math.Max(size.Y, 10.0);   // Wall thickness direction  
+                double height = Math.Max(size.Z, 10.0);  // Wall height direction
 
-                // Inverse transform: world -> crop-local
-                Transform inv = null;
-                try { inv = cropTransform.Inverse; }
-                catch { inv = Transform.Identity; }
-
-                // Wall endpoints in world coordinates
+                // Wall endpoints for actual wall length calculation
                 XYZ p0 = locationCurve.Curve.GetEndPoint(0);
                 XYZ p1 = locationCurve.Curve.GetEndPoint(1);
+                double wallLength = p0.DistanceTo(p1);
 
-                // Convert wall endpoints and bounding box Z extents to crop-local coords
-                XYZ p0Local = inv.OfPoint(p0);
-                XYZ p1Local = inv.OfPoint(p1);
+                // Use actual wall length instead of bounding box width if it's larger
+                width = Math.Max(wallLength, width);
 
-                XYZ wallMinWorld = wallBounds.Min;
-                XYZ wallMaxWorld = wallBounds.Max;
-                XYZ wallMinLocal = inv.OfPoint(wallMinWorld);
-                XYZ wallMaxLocal = inv.OfPoint(wallMaxWorld);
+                // Smart padding (same as group elevations)
+                double maxModelDim = Math.Max(Math.Max(width, depth), height);
+                double padding = Math.Max(2.0, Math.Min(10.0, maxModelDim * 0.1)); // 10% of largest dimension
 
-                // Determine X range from endpoints (in local coords)
-                double xMin = Math.Min(p0Local.X, p1Local.X) - horizontalPadding;
-                double xMax = Math.Max(p0Local.X, p1Local.X) + horizontalPadding;
+                System.Diagnostics.Debug.WriteLine($"=== WALL CROP DEBUG (GROUP STYLE) ===");
+                System.Diagnostics.Debug.WriteLine($"Bounding box size: W={size.X:F1}, D={size.Y:F1}, H={size.Z:F1}");
+                System.Diagnostics.Debug.WriteLine($"Wall length: {wallLength:F1}");
+                System.Diagnostics.Debug.WriteLine($"Used dimensions: W={width:F1}, D={depth:F1}, H={height:F1}");
+                System.Diagnostics.Debug.WriteLine($"Padding: {padding:F1}");
 
-                // Y range centered around 0 with depth (some families put marker Y offset; center is safe)
-                double yMin = -cropDepth * 0.5;
-                double yMax = cropDepth * 0.5;
+                // Create section box using group elevation approach
+                // For internal wall elevation: looking at the wall from inside
+                var sectionBox = new BoundingBoxXYZ();
 
-                // Z range from transformed wall bounding box
-                double zMin = Math.Min(wallMinLocal.Z, wallMaxLocal.Z) - verticalPadding;
-                double zMax = Math.Max(wallMinLocal.Z, wallMaxLocal.Z) + verticalPadding;
+                // Section box dimensions in local coordinates (like group elevations do it)
+                // X = along wall (width), Y = into wall (depth), Z = up (height)
+                sectionBox.Min = new XYZ(-width / 2 - padding, -depth / 2 - padding, -padding);
+                sectionBox.Max = new XYZ(width / 2 + padding, depth / 2 + padding, height + padding);
 
-                var cropBox = new BoundingBoxXYZ
-                {
-                    Min = new XYZ(xMin, yMin, zMin),
-                    Max = new XYZ(xMax, yMax, zMax),
-                    Transform = cropTransform
-                };
+                // Create transform like group elevations do (clean coordinate system)
+                var wallDirection = (p1 - p0).Normalize();
+                var wallNormal = new XYZ(-wallDirection.Y, wallDirection.X, 0).Normalize();
+                if (wall.Flipped) wallNormal = -wallNormal;
 
-                // Assign crop box to view (inside outer transaction)
-                elevation.CropBox = cropBox;
+                // For internal elevation: viewer is inside looking at wall
+                var transform = Transform.Identity;
+                transform.BasisX = wallDirection;     // X = along wall
+                transform.BasisY = XYZ.BasisZ;        // Y = up (Z becomes Y in view)  
+                transform.BasisZ = wallNormal;        // Z = into wall (normal becomes depth)
+                transform.Origin = center;            // Center on wall
+
+                sectionBox.Transform = transform;
+
+                System.Diagnostics.Debug.WriteLine($"Section box local: Min({sectionBox.Min.X:F1}, {sectionBox.Min.Y:F1}, {sectionBox.Min.Z:F1})");
+                System.Diagnostics.Debug.WriteLine($"Section box local: Max({sectionBox.Max.X:F1}, {sectionBox.Max.Y:F1}, {sectionBox.Max.Z:F1})");
+                System.Diagnostics.Debug.WriteLine($"Final height: {sectionBox.Max.Z - sectionBox.Min.Z:F1}");
+
+                // Assign crop box to view
+                elevation.CropBox = sectionBox;
                 elevation.CropBoxActive = true;
                 elevation.CropBoxVisible = true;
             }
-            catch
+            catch (Exception ex)
             {
-                // swallow or log; keep overall process robust
+                System.Diagnostics.Debug.WriteLine($"Error in SetElevationCropRegion: {ex.Message}");
             }
         }
 
