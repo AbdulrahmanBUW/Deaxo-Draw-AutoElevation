@@ -120,16 +120,18 @@
             </Setter>
         </Style>
 
-        <!-- Search TextBox Style -->
+        <!-- Search TextBox Style - Fixed using BaseNameInputWindow approach -->
         <Style x:Key="SearchBoxStyle" TargetType="TextBox">
             <Setter Property="Height" Value="44"/>
             <Setter Property="FontSize" Value="14"/>
+            <Setter Property="MinHeight" Value="36"/>
             <Setter Property="Padding" Value="16,12"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderBrush" Value="#E9ECEF"/>
             <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Foreground" Value="#212529"/>
+            <Setter Property="Foreground" Value="#495057"/>
             <Setter Property="CaretBrush" Value="#007AFF"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -139,9 +141,7 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 Padding="{TemplateBinding Padding}">
                             <ScrollViewer x:Name="PART_ContentHost" 
-                                          Focusable="false"
-                                          HorizontalScrollBarVisibility="Hidden"
-                                          VerticalScrollBarVisibility="Hidden"/>
+                                          Focusable="false"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
@@ -209,45 +209,42 @@
                 <!-- Search Box -->
                 <StackPanel Grid.Row="1">
                     <TextBlock Text="Search Templates:" FontSize="12" FontWeight="Medium" Foreground="#495057" Margin="0,0,0,8"/>
-                    <Grid>
-                        <TextBox x:Name="SearchBox" 
-                 Height="44"
-                 FontSize="14"
-                 Padding="16,12"
-                 Background="White"
-                 Foreground="#212529"
-                 BorderBrush="#E9ECEF"
-                 BorderThickness="2"
-                 TextChanged="SearchBox_TextChanged"
-                 GotFocus="SearchBox_GotFocus"
-                 LostFocus="SearchBox_LostFocus">
-                            <TextBox.Style>
-                                <Style TargetType="TextBox">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="TextBox">
-                                                <Border Background="{TemplateBinding Background}"
-                                        CornerRadius="10"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                        Padding="{TemplateBinding Padding}">
-                                                    <ScrollViewer x:Name="PART_ContentHost" 
-                                                  Focusable="false"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </TextBox.Style>
-                        </TextBox>
-                        <TextBlock x:Name="PlaceholderText"
-                   Text="Type to search templates..."
-                   FontStyle="Italic" 
-                   Foreground="#ADB5BD" 
-                   IsHitTestVisible="False"
-                   Margin="18,14"
-                   VerticalAlignment="Center"/>
-                    </Grid>
+                    <TextBox x:Name="SearchBox" 
+                             Height="44"
+                             FontSize="14"
+                             Padding="16,12"
+                             Background="White"
+                             Foreground="#212529"
+                             BorderBrush="#E9ECEF"
+                             BorderThickness="2"
+                             CaretBrush="#007AFF"
+                             TextChanged="SearchBox_TextChanged"
+                             GotFocus="SearchBox_GotFocus"
+                             LostFocus="SearchBox_LostFocus">
+                        <TextBox.Style>
+                            <Style TargetType="TextBox">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="TextBox">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="10"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ScrollViewer x:Name="PART_ContentHost" 
+                                                              Focusable="false"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsFocused" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#007AFF"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
                 </StackPanel>
             </Grid>
 

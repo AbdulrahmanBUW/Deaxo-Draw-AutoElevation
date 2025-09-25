@@ -12,6 +12,9 @@ namespace Deaxo.AutoElevation.Commands
     [Transaction(TransactionMode.Manual)]
     public class InternalElevationCommand : IExternalCommand
     {
+        // Static counter to maintain sequence across all elevations in this command execution
+        private static int sequenceCounter = 1;
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             UIApplication uiapp = commandData.Application;
@@ -20,6 +23,9 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
+                // Reset sequence counter at start of command
+                sequenceCounter = 1;
+
                 var selectOpts = new Dictionary<string, object>()
                 {
                     {"Walls", BuiltInCategory.OST_Walls},
@@ -58,11 +64,19 @@ namespace Deaxo.AutoElevation.Commands
                     return Result.Cancelled;
                 }
 
+                // Ask user for base name ONCE at the beginning
+                string baseName = GetBaseNameFromUser();
+                if (baseName == null)
+                {
+                    TaskDialog.Show("DEAXO", "Operation cancelled.");
+                    return Result.Cancelled;
+                }
+
                 View chosenTemplate = GetViewTemplate(doc);
 
                 var progressWindow = new ProgressWindow();
                 progressWindow.Show();
-                progressWindow.UpdateStatus("Creating internal building elevations...", "Processing selected walls");
+                progressWindow.UpdateStatus("Creating internal building elevations...", $"Using base name: {baseName}");
 
                 var results = new List<string>();
                 var startTime = DateTime.Now;
@@ -83,7 +97,7 @@ namespace Deaxo.AutoElevation.Commands
                             {
                                 Element el = doc.GetElement(r);
                                 progressWindow.UpdateStatus($"Processing wall {i + 1} of {refs.Count}...",
-                                    $"Wall ID: {el.Id}");
+                                    $"Wall ID: {el.Id}, Creating: {baseName}_{sequenceCounter}");
 
                                 if (!(el is Wall wall))
                                 {
@@ -91,17 +105,17 @@ namespace Deaxo.AutoElevation.Commands
                                     continue;
                                 }
 
-                                var elevation = CreateInternalBuildingElevation(doc, wall, chosenTemplate);
+                                var elevation = CreateInternalBuildingElevation(doc, wall, chosenTemplate, baseName);
                                 if (elevation == null)
                                 {
                                     results.Add($"Failed to create building elevation for wall {el.Id}");
                                     continue;
                                 }
 
-                                results.Add($"✓ Created building elevation {elevation.Id} for wall {el.Id}");
+                                results.Add($"✓ Created building elevation {elevation.Id} ({elevation.Name}) for wall {el.Id}");
 
                                 progressWindow.UpdateProgress(i + 1, refs.Count);
-                                progressWindow.AddLogMessage($"Created building elevation for wall {wall.Id}");
+                                progressWindow.AddLogMessage($"Created elevation: {elevation.Name} for wall {wall.Id}");
                             }
                             catch (Exception exInner)
                             {
@@ -118,8 +132,8 @@ namespace Deaxo.AutoElevation.Commands
                         System.Threading.Thread.Sleep(1500);
                         progressWindow.Close();
 
-                        var resultsWindow = new ResultsWindow(results, "Internal Building Elevations", duration);
-                        resultsWindow.ShowDialog();
+                        // var resultsWindow = new ResultsWindow(results, "Internal Building Elevations", duration);
+                        // resultsWindow.ShowDialog();
                     }
                     catch (Exception ex)
                     {
@@ -138,7 +152,69 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
-        private ViewSection CreateInternalBuildingElevation(Document doc, Wall wall, View viewTemplate)
+        /// <summary>
+        /// Prompts user for base name input
+        /// </summary>
+        private string GetBaseNameFromUser()
+        {
+            try
+            {
+                // Create a simple input dialog
+                var inputWindow = new BaseNameInputWindow();
+                bool? result = inputWindow.ShowDialog();
+
+                if (result == true)
+                {
+                    string baseName = inputWindow.BaseName;
+
+                    // Default to "Elevation" if empty
+                    if (string.IsNullOrWhiteSpace(baseName))
+                    {
+                        baseName = "Elevation";
+                    }
+
+                    // Clean the base name (remove invalid characters)
+                    baseName = CleanViewName(baseName);
+
+                    return baseName;
+                }
+
+                return null; // User cancelled
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting base name: {ex.Message}");
+                return "Elevation"; // Fallback to default
+            }
+        }
+
+        /// <summary>
+        /// Clean view name by removing invalid characters
+        /// </summary>
+        private string CleanViewName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "Elevation";
+
+            // Remove characters that might cause issues in Revit view names
+            var invalidChars = new char[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|', '{', '}' };
+
+            foreach (char c in invalidChars)
+            {
+                name = name.Replace(c, '_');
+            }
+
+            // Trim whitespace and limit length
+            name = name.Trim();
+            if (name.Length > 50) // Reasonable limit for view names
+            {
+                name = name.Substring(0, 50).Trim();
+            }
+
+            return string.IsNullOrWhiteSpace(name) ? "Elevation" : name;
+        }
+
+        private ViewSection CreateInternalBuildingElevation(Document doc, Wall wall, View viewTemplate, string baseName)
         {
             try
             {
@@ -163,14 +239,18 @@ namespace Deaxo.AutoElevation.Commands
                     return null;
                 }
 
-                string wallTypeName = GetWallTypeName(wall);
-                string elevationName = $"{wallTypeName}_IE";
+                // Use the base name with sequence number instead of wall type name
+                string elevationName = $"{baseName}_{sequenceCounter}";
                 SetUniqueViewName(elevation, elevationName);
+
+                // Increment counter for next elevation
+                sequenceCounter++;
 
                 return elevation;
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Error creating internal building elevation: {ex.Message}");
                 return null;
             }
         }
@@ -290,7 +370,6 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
-
         private void SetElevationViewProperties(ViewSection elevationView, Wall wall)
         {
             try
@@ -380,8 +459,6 @@ namespace Deaxo.AutoElevation.Commands
                 System.Diagnostics.Debug.WriteLine($"Error in SetElevationCropRegion: {ex.Message}");
             }
         }
-
-
 
         private string GetWallTypeName(Wall wall)
         {
@@ -502,12 +579,15 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
+        /// <summary>
+        /// Sets a unique view name, appending a suffix if the name already exists
+        /// </summary>
         private void SetUniqueViewName(ViewSection view, string baseName)
         {
             if (view == null) return;
 
             string viewName = baseName;
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 100; i++) // Try up to 100 variations
             {
                 try
                 {
@@ -516,7 +596,18 @@ namespace Deaxo.AutoElevation.Commands
                 }
                 catch
                 {
-                    viewName = $"{baseName}_{i + 1}";
+                    // Name already exists, try with suffix
+                    if (i == 0)
+                    {
+                        // First retry: add a short timestamp suffix
+                        string suffix = DateTime.Now.ToString("mmss");
+                        viewName = $"{baseName}_{suffix}";
+                    }
+                    else
+                    {
+                        // Subsequent retries: add incremental suffix
+                        viewName = $"{baseName}_{i + 1}";
+                    }
                 }
             }
         }

@@ -30,35 +30,21 @@ namespace Deaxo.AutoElevation.UI
 
             // Update status text for single selection
             StatusText.Text = "Select one template or continue with default formatting";
-
-            // Initialize placeholder visibility
-            UpdatePlaceholder();
         }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             FilterOptions();
-            UpdatePlaceholder();
         }
 
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            UpdatePlaceholder();
+            // No placeholder handling needed anymore
         }
 
         private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
         {
-            UpdatePlaceholder();
-        }
-
-        private void UpdatePlaceholder()
-        {
-            if (PlaceholderText != null)
-            {
-                PlaceholderText.Visibility = string.IsNullOrEmpty(SearchBox.Text) && !SearchBox.IsFocused
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-            }
+            // No placeholder handling needed anymore
         }
 
         private void FilterOptions()
