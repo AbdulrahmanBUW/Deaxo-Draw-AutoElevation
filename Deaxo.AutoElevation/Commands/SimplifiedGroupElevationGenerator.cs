@@ -1,4 +1,4 @@
-﻿// SimplifiedGroupElevationGenerator.cs - FIXED SECTION TRANSFORMS
+﻿// SimplifiedGroupElevationGenerator.cs - UPDATED WITH IMPROVED TEMPLATE HANDLING
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +8,7 @@ namespace Deaxo.AutoElevation.Commands
 {
     /// <summary>
     /// Simplified group elevation generator that creates assembly-style views
-    /// FIXED VERSION: Corrected transform issues for Top, Bottom, Left, Right views
+    /// UPDATED VERSION: Enhanced template handling with compatibility checking
     /// </summary>
     public static class SimplifiedGroupElevationGenerator
     {
@@ -50,8 +50,13 @@ namespace Deaxo.AutoElevation.Commands
 
             try
             {
-                System.Diagnostics.Debug.WriteLine("=== STARTING GROUP VIEW CREATION (FIXED VERSION) ===");
+                System.Diagnostics.Debug.WriteLine("=== STARTING GROUP VIEW CREATION (ENHANCED TEMPLATE VERSION) ===");
                 System.Diagnostics.Debug.WriteLine($"Input: {elements.Count} elements");
+
+                if (viewTemplate != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Template provided: '{viewTemplate.Name}' (Type: {viewTemplate.ViewType})");
+                }
 
                 // Calculate the overall bounding box of all elements
                 var overallBounds = CalculateElementsBounds(elements);
@@ -77,25 +82,25 @@ namespace Deaxo.AutoElevation.Commands
 
                 System.Diagnostics.Debug.WriteLine($"Using section view type: {sectionTypeId}");
 
-                // Create all 6 section views using FIXED transforms
-                System.Diagnostics.Debug.WriteLine("\n--- CREATING SECTION VIEWS WITH FIXED TRANSFORMS ---");
+                // Create all 6 section views using ENHANCED template handling
+                System.Diagnostics.Debug.WriteLine("\n--- CREATING SECTION VIEWS WITH ENHANCED TEMPLATE HANDLING ---");
 
-                result.TopView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Top, viewTemplate, sectionTypeId);
-                result.BottomView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Bottom, viewTemplate, sectionTypeId);
-                result.FrontView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Front, viewTemplate, sectionTypeId);
-                result.BackView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Back, viewTemplate, sectionTypeId);
-                result.LeftView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Left, viewTemplate, sectionTypeId);
-                result.RightView = CreateFixedSectionView(doc, overallBounds, ViewDirection.Right, viewTemplate, sectionTypeId);
+                result.TopView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Top, viewTemplate, sectionTypeId);
+                result.BottomView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Bottom, viewTemplate, sectionTypeId);
+                result.FrontView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Front, viewTemplate, sectionTypeId);
+                result.BackView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Back, viewTemplate, sectionTypeId);
+                result.LeftView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Left, viewTemplate, sectionTypeId);
+                result.RightView = CreateEnhancedSectionView(doc, overallBounds, ViewDirection.Right, viewTemplate, sectionTypeId);
 
-                // Create 3D view
-                System.Diagnostics.Debug.WriteLine("\n--- CREATING 3D VIEW ---");
-                result.ThreeDView = Create3DView(doc, overallBounds, viewTemplate);
+                // Create 3D view with enhanced template handling
+                System.Diagnostics.Debug.WriteLine("\n--- CREATING 3D VIEW WITH ENHANCED TEMPLATE HANDLING ---");
+                result.ThreeDView = CreateEnhanced3DView(doc, overallBounds, viewTemplate);
 
                 // Final summary
                 int sectionCount = result.AllSectionViews.Count;
                 int totalCount = result.TotalViewCount;
 
-                System.Diagnostics.Debug.WriteLine($"\n=== FIXED VERSION RESULTS ===");
+                System.Diagnostics.Debug.WriteLine($"\n=== ENHANCED TEMPLATE VERSION RESULTS ===");
                 System.Diagnostics.Debug.WriteLine($"Section views: {sectionCount}/6");
                 System.Diagnostics.Debug.WriteLine($"3D views: {(result.ThreeDView != null ? 1 : 0)}/1");
                 System.Diagnostics.Debug.WriteLine($"Total: {totalCount}/7");
@@ -114,17 +119,121 @@ namespace Deaxo.AutoElevation.Commands
             Top, Bottom, Front, Back, Left, Right
         }
 
+        #region Template Application Methods
+
         /// <summary>
-        /// Create section view using CORRECTED transform logic
+        /// Applies view template with proper error handling and compatibility checking
         /// </summary>
-        private static ViewSection CreateFixedSectionView(Document doc, BoundingBoxXYZ bounds,
+        private static bool ApplyViewTemplate(View view, View viewTemplate, string viewDescription = "")
+        {
+            if (viewTemplate == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"No template selected for {viewDescription}");
+                return false;
+            }
+
+            if (!viewTemplate.IsTemplate)
+            {
+                System.Diagnostics.Debug.WriteLine($"Selected view '{viewTemplate.Name}' is not a template");
+                return false;
+            }
+
+            try
+            {
+                // Check compatibility first
+                if (!IsTemplateCompatible(view, viewTemplate))
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠ Template '{viewTemplate.Name}' (Type: {viewTemplate.ViewType}) not compatible with {viewDescription} (Type: {view.ViewType})");
+                    return false;
+                }
+
+                // Apply the template
+                view.ViewTemplateId = viewTemplate.Id;
+
+                // Verify it was applied
+                if (view.ViewTemplateId == viewTemplate.Id)
+                {
+                    System.Diagnostics.Debug.WriteLine($"✓ Successfully applied template '{viewTemplate.Name}' to {viewDescription}");
+                    LogTemplateProperties(view, viewTemplate);
+                    return true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"✗ Template application verification failed for {viewDescription}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"✗ Exception applying template '{viewTemplate.Name}' to {viewDescription}: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a template is compatible with a view type
+        /// </summary>
+        private static bool IsTemplateCompatible(View view, View template)
+        {
+            if (view == null || template == null || !template.IsTemplate)
+                return false;
+
+            // Section views can use Section templates
+            if (view is ViewSection && template.ViewType == ViewType.Section)
+                return true;
+
+            // 3D views can use 3D templates  
+            if (view is View3D && template.ViewType == ViewType.ThreeD)
+                return true;
+
+            // Plan views can use Plan templates
+            if (view is ViewPlan && (template.ViewType == ViewType.FloorPlan ||
+                                    template.ViewType == ViewType.CeilingPlan ||
+                                    template.ViewType == ViewType.AreaPlan))
+                return true;
+
+            // Elevation views can use Elevation templates
+            if (view.ViewType == ViewType.Elevation && template.ViewType == ViewType.Elevation)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Logs template properties for debugging
+        /// </summary>
+        private static void LogTemplateProperties(View view, View template)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"  Applied template properties:");
+                System.Diagnostics.Debug.WriteLine($"    - Scale: {view.Scale}");
+                System.Diagnostics.Debug.WriteLine($"    - Detail Level: {view.DetailLevel}");
+
+                if (view is ViewSection section)
+                {
+                    System.Diagnostics.Debug.WriteLine($"    - Crop Box Active: {section.CropBoxActive}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"    Could not log template properties: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Create section view using ENHANCED template logic
+        /// </summary>
+        private static ViewSection CreateEnhancedSectionView(Document doc, BoundingBoxXYZ bounds,
             ViewDirection direction, View viewTemplate, ElementId sectionTypeId)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"\n--- Creating {direction} Section (FIXED) ---");
+                System.Diagnostics.Debug.WriteLine($"\n--- Creating {direction} Section (ENHANCED) ---");
 
-                // Create section box using the WORKING Front/Back pattern as template
+                // Create section box using the proven working pattern
                 var sectionBox = CreateWorkingSectionBox(bounds, direction);
                 if (sectionBox == null)
                 {
@@ -153,29 +262,88 @@ namespace Deaxo.AutoElevation.Commands
                     return null;
                 }
 
-                // Apply template
-                if (viewTemplate != null)
-                {
-                    try
-                    {
-                        section.ViewTemplateId = viewTemplate.Id;
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"WARNING: Template failed for {direction}: {ex.Message}");
-                    }
-                }
+                // ENHANCED TEMPLATE APPLICATION:
+                bool templateApplied = ApplyViewTemplate(section, viewTemplate, $"{direction} Section");
 
                 // Set name
                 string viewName = $"group_elements_view - {direction}";
                 SetUniqueViewName(section, viewName);
 
-                System.Diagnostics.Debug.WriteLine($"SUCCESS: {direction} view created with ID {section.Id}");
+                // Final status with template information
+                System.Diagnostics.Debug.WriteLine($"SUCCESS: {direction} view created with ID {section.Id} (Template: {(templateApplied ? "Applied" : "Not Applied")})");
+
                 return section;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"EXCEPTION creating {direction}: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Create 3D view with ENHANCED template handling
+        /// </summary>
+        private static View3D CreateEnhanced3DView(Document doc, BoundingBoxXYZ bounds, View viewTemplate)
+        {
+            try
+            {
+                // Get 3D view type
+                var view3DType = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewFamilyType))
+                    .Cast<ViewFamilyType>()
+                    .FirstOrDefault(vt => vt.ViewFamily == ViewFamily.ThreeDimensional);
+
+                if (view3DType == null) return null;
+
+                // Create isometric 3D view
+                var view3D = View3D.CreateIsometric(doc, view3DType.Id);
+                if (view3D == null) return null;
+
+                // Set section box
+                var size = bounds.Max - bounds.Min;
+                double padding = Math.Max(Math.Max(size.X, size.Y), size.Z) * 0.2;
+
+                var sectionBox = new BoundingBoxXYZ
+                {
+                    Min = bounds.Min - new XYZ(padding, padding, padding),
+                    Max = bounds.Max + new XYZ(padding, padding, padding),
+                    Transform = Transform.Identity
+                };
+
+                view3D.IsSectionBoxActive = true;
+                view3D.SetSectionBox(sectionBox);
+
+                // Try orthographic mode
+                try
+                {
+                    var perspectiveParam = view3D.get_Parameter(BuiltInParameter.VIEWER_PERSPECTIVE);
+                    if (perspectiveParam != null && !perspectiveParam.IsReadOnly)
+                        perspectiveParam.Set(0);
+                }
+                catch { }
+
+                // ENHANCED TEMPLATE APPLICATION FOR 3D:
+                bool templateApplied = ApplyViewTemplate(view3D, viewTemplate, "3D View");
+
+                // Set name and orientation
+                SetUniqueViewName(view3D, "group_elements_view - 3D");
+
+                try
+                {
+                    var center = (bounds.Min + bounds.Max) / 2;
+                    var viewDirection = new XYZ(-1, -1, -0.5).Normalize();
+                    var upDirection = XYZ.BasisZ;
+                    view3D.SetOrientation(new ViewOrientation3D(center, upDirection, viewDirection));
+                }
+                catch { }
+
+                System.Diagnostics.Debug.WriteLine($"SUCCESS: 3D view created (Template: {(templateApplied ? "Applied" : "Not Applied")})");
+                return view3D;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR creating 3D view: {ex.Message}");
                 return null;
             }
         }
@@ -318,76 +486,6 @@ namespace Deaxo.AutoElevation.Commands
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ERROR creating section box for {direction}: {ex.Message}");
-                return null;
-            }
-        }
-
-
-        /// <summary>
-        /// Create 3D view
-        /// </summary>
-        private static View3D Create3DView(Document doc, BoundingBoxXYZ bounds, View viewTemplate)
-        {
-            try
-            {
-                // Get 3D view type
-                var view3DType = new FilteredElementCollector(doc)
-                    .OfClass(typeof(ViewFamilyType))
-                    .Cast<ViewFamilyType>()
-                    .FirstOrDefault(vt => vt.ViewFamily == ViewFamily.ThreeDimensional);
-
-                if (view3DType == null) return null;
-
-                // Create isometric 3D view
-                var view3D = View3D.CreateIsometric(doc, view3DType.Id);
-                if (view3D == null) return null;
-
-                // Set section box
-                var size = bounds.Max - bounds.Min;
-                double padding = Math.Max(Math.Max(size.X, size.Y), size.Z) * 0.2;
-
-                var sectionBox = new BoundingBoxXYZ
-                {
-                    Min = bounds.Min - new XYZ(padding, padding, padding),
-                    Max = bounds.Max + new XYZ(padding, padding, padding),
-                    Transform = Transform.Identity
-                };
-
-                view3D.IsSectionBoxActive = true;
-                view3D.SetSectionBox(sectionBox);
-
-                // Try orthographic mode
-                try
-                {
-                    var perspectiveParam = view3D.get_Parameter(BuiltInParameter.VIEWER_PERSPECTIVE);
-                    if (perspectiveParam != null && !perspectiveParam.IsReadOnly)
-                        perspectiveParam.Set(0);
-                }
-                catch { }
-
-                // Apply template
-                if (viewTemplate != null && viewTemplate is View3D)
-                {
-                    try { view3D.ViewTemplateId = viewTemplate.Id; } catch { }
-                }
-
-                // Set name and orientation
-                SetUniqueViewName(view3D, "group_elements_view - 3D");
-
-                try
-                {
-                    var center = (bounds.Min + bounds.Max) / 2;
-                    var viewDirection = new XYZ(-1, -1, -0.5).Normalize();
-                    var upDirection = XYZ.BasisZ;
-                    view3D.SetOrientation(new ViewOrientation3D(center, upDirection, viewDirection));
-                }
-                catch { }
-
-                return view3D;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ERROR creating 3D view: {ex.Message}");
                 return null;
             }
         }

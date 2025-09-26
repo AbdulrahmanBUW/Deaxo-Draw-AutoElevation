@@ -88,6 +88,9 @@
     <Compile Include="UI\SelectFromDictWindow.xaml.cs">
       <DependentUpon>SelectFromDictWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\SheetConfigurationWindow.xaml.cs">
+      <DependentUpon>SheetConfigurationWindow.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Page Include="UI\BaseNameInputWindow.xaml">
@@ -109,6 +112,9 @@
     <Page Include="UI\SelectFromDictWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\SheetConfigurationWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="UI\WPF_styles.xaml">
       <Generator>MSBuild:Compile</Generator>

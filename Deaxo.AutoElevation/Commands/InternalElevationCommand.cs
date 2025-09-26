@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Complete InternalElevationCommand.cs with Enhanced Template Handling and Sheet Generation
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.Attributes;
@@ -72,7 +73,26 @@ namespace Deaxo.AutoElevation.Commands
                     return Result.Cancelled;
                 }
 
+                // Get sheet configuration from user
+                var sheetConfig = GetSheetConfiguration();
+                if (sheetConfig == null)
+                {
+                    TaskDialog.Show("DEAXO", "Operation cancelled.");
+                    return Result.Cancelled;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Sheet configuration: {sheetConfig}");
+
+                // Get view template with improved handling
                 View chosenTemplate = GetViewTemplate(doc);
+                if (chosenTemplate != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Using view template: {chosenTemplate.Name} (Type: {chosenTemplate.ViewType}, ID: {chosenTemplate.Id})");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("No view template selected - using default formatting");
+                }
 
                 var progressWindow = new ProgressWindow();
                 progressWindow.Show();
@@ -81,13 +101,40 @@ namespace Deaxo.AutoElevation.Commands
                 var results = new List<string>();
                 var startTime = DateTime.Now;
 
-                using (Transaction t = new Transaction(doc, "DEAXO - Create Internal Building Elevations"))
+                // Update transaction name based on sheet option - C# 7.3 compatible
+                string transactionName;
+                if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.None)
+                    transactionName = "DEAXO - Create Internal Building Elevations";
+                else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Individual)
+                    transactionName = "DEAXO - Create Internal Building Elevations & Individual Sheets";
+                else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Combined)
+                    transactionName = "DEAXO - Create Internal Building Elevations & Combined Sheet";
+                else
+                    transactionName = "DEAXO - Create Internal Building Elevations";
+
+                using (Transaction t = new Transaction(doc, transactionName))
                 {
                     t.Start();
 
                     try
                     {
                         progressWindow.UpdateProgress(0, refs.Count);
+
+                        // Calculate total operations based on sheet option - C# 7.3 compatible
+                        int totalOperations;
+                        if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.None)
+                            totalOperations = refs.Count; // Only views
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Individual)
+                            totalOperations = refs.Count * 2; // Views + individual sheets
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Combined)
+                            totalOperations = refs.Count + 1; // Views + one combined sheet
+                        else
+                            totalOperations = refs.Count;
+
+                        int currentOperation = 0;
+                        int templateAppliedCount = 0;
+                        int sheetCount = 0; // Declare sheetCount variable
+                        var createdElevations = new List<(ViewSection elevation, Wall wall, bool templateApplied)>();
 
                         for (int i = 0; i < refs.Count; i++)
                         {
@@ -105,6 +152,7 @@ namespace Deaxo.AutoElevation.Commands
                                     continue;
                                 }
 
+                                // Create elevation view
                                 var elevation = CreateInternalBuildingElevation(doc, wall, chosenTemplate, baseName);
                                 if (elevation == null)
                                 {
@@ -112,28 +160,133 @@ namespace Deaxo.AutoElevation.Commands
                                     continue;
                                 }
 
-                                results.Add($"✓ Created building elevation {elevation.Id} ({elevation.Name}) for wall {el.Id}");
+                                // Check if template was applied
+                                bool templateApplied = (chosenTemplate != null && elevation.ViewTemplateId == chosenTemplate.Id);
+                                if (templateApplied) templateAppliedCount++;
 
-                                progressWindow.UpdateProgress(i + 1, refs.Count);
-                                progressWindow.AddLogMessage($"Created elevation: {elevation.Name} for wall {wall.Id}");
+                                createdElevations.Add((elevation, wall, templateApplied));
+                                results.Add($"✓ Created building elevation {elevation.Id} ({elevation.Name}) for wall {el.Id} (Template: {(templateApplied ? "Applied" : "Not Applied")})");
+                                currentOperation++;
+                                progressWindow.UpdateProgress(currentOperation, totalOperations);
+                                progressWindow.AddLogMessage($"Created elevation: {elevation.Name} for wall {wall.Id} (Template: {(templateApplied ? "Applied" : "Not Applied")})");
                             }
                             catch (Exception exInner)
                             {
                                 var error = $"Error processing wall {r.ElementId}: {exInner.Message}";
                                 results.Add($"✗ {error}");
+                                progressWindow.AddLogMessage(error);
                             }
+                        }
+
+                        // Handle sheet creation based on user choice
+                        if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.None)
+                        {
+                            progressWindow.AddLogMessage("Skipping sheet creation as requested");
+                            results.Add("✓ Internal elevations created without sheets as requested");
+                        }
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Individual)
+                        {
+                            progressWindow.UpdateStatus("Creating individual sheets...", "Generating separate sheet for each elevation");
+                            progressWindow.AddLogMessage("Starting individual sheet creation process");
+
+                            foreach (var elevationTuple in createdElevations)
+                            {
+                                var elevationView = elevationTuple.elevation;
+                                var wallElement = elevationTuple.wall;
+                                var templateApplied = elevationTuple.templateApplied;
+
+                                try
+                                {
+                                    progressWindow.UpdateStatus($"Creating sheet for elevation {elevationView.Name}...",
+                                        $"Placing view {elevationView.Id} on new sheet");
+
+                                    var sheet = CreateIndividualSheetForElevation(doc, elevationView, wallElement, baseName, results);
+                                    if (sheet != null)
+                                    {
+                                        sheetCount++;
+                                        results.Add($"✓ Created individual sheet {sheet.Id} ({sheet.SheetNumber}) for elevation {elevationView.Id}");
+                                        progressWindow.AddLogMessage($"Created individual sheet: {sheet.SheetNumber} for elevation {elevationView.Name}");
+                                    }
+
+                                    currentOperation++;
+                                    progressWindow.UpdateProgress(currentOperation, totalOperations);
+                                }
+                                catch (Exception sheetEx)
+                                {
+                                    var sheetError = $"Error creating individual sheet for elevation {elevationView.Id}: {sheetEx.Message}";
+                                    results.Add($"✗ {sheetError}");
+                                    progressWindow.AddLogMessage(sheetError);
+                                }
+                            }
+                        }
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Combined)
+                        {
+                            progressWindow.UpdateStatus("Creating combined sheet...", "Placing all elevations on single sheet");
+                            progressWindow.AddLogMessage("Starting combined sheet creation process");
+
+                            try
+                            {
+                                var combinedSheet = CreateCombinedSheetForElevations(doc, createdElevations, baseName);
+                                if (combinedSheet != null)
+                                {
+                                    sheetCount = 1;
+                                    results.Add($"✓ Created combined sheet {combinedSheet.Id} ({combinedSheet.SheetNumber}) with {createdElevations.Count} elevations");
+                                    progressWindow.AddLogMessage($"Created combined sheet: {combinedSheet.SheetNumber} with {createdElevations.Count} elevations");
+                                    System.Diagnostics.Debug.WriteLine($"✓ COMBINED SHEET: Created {combinedSheet.Id} with {createdElevations.Count} elevations");
+                                }
+                                else
+                                {
+                                    results.Add($"✗ Failed to create combined sheet");
+                                    System.Diagnostics.Debug.WriteLine($"✗ COMBINED SHEET: Failed");
+                                }
+
+                                currentOperation++;
+                                progressWindow.UpdateProgress(currentOperation, totalOperations);
+                            }
+                            catch (Exception ex)
+                            {
+                                results.Add($"✗ Error creating combined sheet: {ex.Message}");
+                                System.Diagnostics.Debug.WriteLine($"✗ COMBINED SHEET ERROR: {ex.Message}");
+                            }
+                        }
+
+                        // Update final results based on sheet option
+                        if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.None)
+                        {
+                            results.Add($"✓ Total: {createdElevations.Count} internal elevations created (no sheets)");
+                        }
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Individual)
+                        {
+                            results.Add($"✓ Total: {createdElevations.Count} internal elevations and {sheetCount} individual sheets created");
+                        }
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Combined)
+                        {
+                            results.Add($"✓ Total: {createdElevations.Count} internal elevations on {sheetCount} combined sheet created");
                         }
 
                         t.Commit();
 
                         var duration = DateTime.Now - startTime;
-                        progressWindow.ShowCompletion(results, "Internal Building Elevations");
+
+                        // Show completion with appropriate title
+                        string completionTitle;
+                        if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.None)
+                            completionTitle = "Internal Building Elevations";
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Individual)
+                            completionTitle = "Internal Building Elevations & Individual Sheets";
+                        else if (sheetConfig.Value == SheetConfigurationWindow.SheetOption.Combined)
+                            completionTitle = "Internal Building Elevations & Combined Sheet";
+                        else
+                            completionTitle = "Internal Building Elevations";
+
+                        progressWindow.ShowCompletion(results, completionTitle);
+
+                        System.Diagnostics.Debug.WriteLine($"=== INTERNAL ELEVATION COMMAND COMPLETED ===");
+                        System.Diagnostics.Debug.WriteLine($"Total duration: {duration.TotalSeconds:F1} seconds");
+                        System.Diagnostics.Debug.WriteLine($"Template applied to {templateAppliedCount} elevations");
 
                         System.Threading.Thread.Sleep(1500);
                         progressWindow.Close();
-
-                        // var resultsWindow = new ResultsWindow(results, "Internal Building Elevations", duration);
-                        // resultsWindow.ShowDialog();
                     }
                     catch (Exception ex)
                     {
@@ -151,6 +304,140 @@ namespace Deaxo.AutoElevation.Commands
                 return Result.Failed;
             }
         }
+
+        #region Sheet Configuration
+
+        /// <summary>
+        /// Gets sheet configuration from user
+        /// </summary>
+        private SheetConfigurationWindow.SheetOption? GetSheetConfiguration()
+        {
+            try
+            {
+                var configWindow = new SheetConfigurationWindow();
+                bool? result = configWindow.ShowDialog();
+
+                if (result == true)
+                {
+                    return configWindow.SelectedOption;
+                }
+
+                return null; // User cancelled
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting sheet configuration: {ex.Message}");
+                return SheetConfigurationWindow.SheetOption.Individual; // Fallback to individual sheets
+            }
+        }
+
+        #endregion
+
+        #region Template Application Methods
+
+        /// <summary>
+        /// Applies view template with proper error handling and compatibility checking
+        /// </summary>
+        private static bool ApplyViewTemplate(View view, View viewTemplate, string viewDescription = "")
+        {
+            if (viewTemplate == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"No template selected for {viewDescription}");
+                return false;
+            }
+
+            if (!viewTemplate.IsTemplate)
+            {
+                System.Diagnostics.Debug.WriteLine($"Selected view '{viewTemplate.Name}' is not a template");
+                return false;
+            }
+
+            try
+            {
+                // Check compatibility first
+                if (!IsTemplateCompatible(view, viewTemplate))
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠ Template '{viewTemplate.Name}' (Type: {viewTemplate.ViewType}) not compatible with {viewDescription} (Type: {view.ViewType})");
+                    return false;
+                }
+
+                // Apply the template
+                view.ViewTemplateId = viewTemplate.Id;
+
+                // Verify it was applied
+                if (view.ViewTemplateId == viewTemplate.Id)
+                {
+                    System.Diagnostics.Debug.WriteLine($"✓ Successfully applied template '{viewTemplate.Name}' to {viewDescription}");
+                    LogTemplateProperties(view, viewTemplate);
+                    return true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"✗ Template application verification failed for {viewDescription}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"✗ Exception applying template '{viewTemplate.Name}' to {viewDescription}: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a template is compatible with a view type
+        /// </summary>
+        private static bool IsTemplateCompatible(View view, View template)
+        {
+            if (view == null || template == null || !template.IsTemplate)
+                return false;
+
+            // Section views can use Section templates
+            if (view is ViewSection && template.ViewType == ViewType.Section)
+                return true;
+
+            // 3D views can use 3D templates  
+            if (view is View3D && template.ViewType == ViewType.ThreeD)
+                return true;
+
+            // Plan views can use Plan templates
+            if (view is ViewPlan && (template.ViewType == ViewType.FloorPlan ||
+                                    template.ViewType == ViewType.CeilingPlan ||
+                                    template.ViewType == ViewType.AreaPlan))
+                return true;
+
+            // Elevation views can use Elevation templates
+            if (view.ViewType == ViewType.Elevation && template.ViewType == ViewType.Elevation)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Logs template properties for debugging
+        /// </summary>
+        private static void LogTemplateProperties(View view, View template)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"  Applied template properties:");
+                System.Diagnostics.Debug.WriteLine($"    - Scale: {view.Scale}");
+                System.Diagnostics.Debug.WriteLine($"    - Detail Level: {view.DetailLevel}");
+
+                if (view is ViewSection section)
+                {
+                    System.Diagnostics.Debug.WriteLine($"    - Crop Box Active: {section.CropBoxActive}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"    Could not log template properties: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region User Input Methods
 
         /// <summary>
         /// Prompts user for base name input
@@ -213,6 +500,10 @@ namespace Deaxo.AutoElevation.Commands
 
             return string.IsNullOrWhiteSpace(name) ? "Elevation" : name;
         }
+
+        #endregion
+
+        #region Elevation Creation Methods
 
         private ViewSection CreateInternalBuildingElevation(Document doc, Wall wall, View viewTemplate, string baseName)
         {
@@ -351,13 +642,11 @@ namespace Deaxo.AutoElevation.Commands
                 // Now proceed to set crop, template, properties on the chosen view
                 SetElevationCropRegion(chosenView, wall);
 
+                // IMPROVED TEMPLATE APPLICATION:
                 if (viewTemplate != null)
                 {
-                    try
-                    {
-                        chosenView.ViewTemplateId = viewTemplate.Id;
-                    }
-                    catch { }
+                    bool templateApplied = ApplyViewTemplate(chosenView, viewTemplate, $"Internal Elevation for Wall {wall.Id}");
+                    System.Diagnostics.Debug.WriteLine($"Template application for wall {wall.Id}: {(templateApplied ? "Success" : "Failed")}");
                 }
 
                 SetElevationViewProperties(chosenView, wall);
@@ -481,104 +770,6 @@ namespace Deaxo.AutoElevation.Commands
             }
         }
 
-        private View GetViewTemplate(Document doc)
-        {
-            var viewTemplates = new FilteredElementCollector(doc)
-                .OfClass(typeof(View))
-                .Cast<View>()
-                .Where(v => v.IsTemplate)
-                .ToList();
-
-            if (viewTemplates.Count == 0) return null;
-
-            var templateNames = viewTemplates.Select(v => v.Name).ToList();
-            templateNames.Insert(0, "None");
-
-            var templateWindow = new SelectFromDictWindow(templateNames,
-                "Select ViewTemplate for Internal Building Elevations", allowMultiple: false);
-            bool? result = templateWindow.ShowDialog();
-
-            if (result == true && templateWindow.SelectedItems.Count > 0)
-            {
-                var name = templateWindow.SelectedItems[0];
-                if (name != "None")
-                {
-                    return viewTemplates.FirstOrDefault(v => v.Name == name);
-                }
-            }
-            return null;
-        }
-
-        private void CreateSheetForElevation(Document doc, ViewSection elevation, Wall wall, List<string> results)
-        {
-            try
-            {
-                ElementId titleblockTypeId = GetTitleblockTypeId(doc);
-                if (titleblockTypeId == null || titleblockTypeId == ElementId.InvalidElementId)
-                {
-                    results.Add($"Warning: No titleblock available for wall {wall.Id}");
-                    return;
-                }
-
-                var sheet = ViewSheet.Create(doc, titleblockTypeId);
-                XYZ pos = new XYZ(0.5, 0.5, 0);
-
-                try
-                {
-                    if (Viewport.CanAddViewToSheet(doc, sheet.Id, elevation.Id))
-                        Viewport.Create(doc, sheet.Id, elevation.Id, pos);
-                }
-                catch (Exception ex)
-                {
-                    results.Add($"Failed to place elevation {elevation.Id} on sheet: {ex.Message}");
-                }
-
-                string wallTypeName = GetWallTypeName(wall);
-                string sheetNumber = $"DEAXO_IE_{wallTypeName}_{wall.Id}";
-                string sheetName = $"{wall.Category?.Name} - Internal Building Elevation (DEAXO GmbH)";
-
-                SetUniqueSheetName(sheet, sheetNumber, sheetName);
-                results.Add($"✓ Created sheet {sheet.Id} for building elevation {elevation.Id}");
-            }
-            catch (Exception ex)
-            {
-                results.Add($"Failed to create sheet for wall {wall.Id}: {ex.Message}");
-            }
-        }
-
-        private ElementId GetTitleblockTypeId(Document doc)
-        {
-            var titleblockTypeId = doc.GetDefaultFamilyTypeId(new ElementId(BuiltInCategory.OST_TitleBlocks));
-            if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
-                return titleblockTypeId;
-
-            var tb = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol))
-                .OfCategory(BuiltInCategory.OST_TitleBlocks)
-                .Cast<FamilySymbol>()
-                .FirstOrDefault();
-
-            return tb?.Id;
-        }
-
-        private void SetUniqueSheetName(ViewSheet sheet, string baseNumber, string baseName)
-        {
-            string sheetNumber = baseNumber;
-            for (int i = 0; i < 10; i++)
-            {
-                try
-                {
-                    sheet.SheetNumber = sheetNumber;
-                    sheet.Name = baseName;
-                    break;
-                }
-                catch
-                {
-                    sheetNumber += "*";
-                }
-            }
-        }
-
         /// <summary>
         /// Sets a unique view name, appending a suffix if the name already exists
         /// </summary>
@@ -611,5 +802,255 @@ namespace Deaxo.AutoElevation.Commands
                 }
             }
         }
+
+        #endregion
+
+        #region Template Selection
+
+        /// <summary>
+        /// Enhanced template selection with type information
+        /// </summary>
+        private View GetViewTemplate(Document doc)
+        {
+            var viewTemplates = new FilteredElementCollector(doc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .Where(v => v.IsTemplate)
+                .ToList();
+
+            if (viewTemplates.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("No view templates found in document");
+                return null;
+            }
+
+            // Group templates by type for better user understanding
+            var sectionTemplates = viewTemplates.Where(v => v.ViewType == ViewType.Section).ToList();
+            var elevationTemplates = viewTemplates.Where(v => v.ViewType == ViewType.Elevation).ToList();
+            var threeDTemplates = viewTemplates.Where(v => v.ViewType == ViewType.ThreeD).ToList();
+
+            System.Diagnostics.Debug.WriteLine($"Available templates: {elevationTemplates.Count} Elevation, {sectionTemplates.Count} Section, {threeDTemplates.Count} 3D");
+
+            // Create display names with type information
+            var templateNames = viewTemplates
+                .Select(v => $"{v.Name} ({v.ViewType})")
+                .OrderBy(name => name)
+                .ToList();
+            templateNames.Insert(0, "None");
+
+            var templateWindow = new SelectFromDictWindow(templateNames,
+                "Select ViewTemplate for Internal Building Elevations", allowMultiple: false);
+            bool? result = templateWindow.ShowDialog();
+
+            if (result == true && templateWindow.SelectedItems.Count > 0)
+            {
+                var selectedName = templateWindow.SelectedItems[0];
+                if (selectedName != "None")
+                {
+                    // Extract the template name (remove the view type suffix)
+                    var actualName = selectedName.Substring(0, selectedName.LastIndexOf(" ("));
+                    var selectedTemplate = viewTemplates.FirstOrDefault(v => v.Name == actualName);
+
+                    if (selectedTemplate != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"User selected template: '{selectedTemplate.Name}' (Type: {selectedTemplate.ViewType})");
+                        return selectedTemplate;
+                    }
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine("No template selected by user");
+            return null;
+        }
+
+        #endregion
+
+        #region Sheet Creation Methods
+
+        /// <summary>
+        /// Creates a sheet for an internal building elevation
+        /// </summary>
+        private ViewSheet CreateIndividualSheetForElevation(Document doc, ViewSection elevation, Wall wall, string baseName, List<string> results)
+        {
+            try
+            {
+                ElementId titleblockTypeId = GetTitleblockTypeId(doc);
+                if (titleblockTypeId == null || titleblockTypeId == ElementId.InvalidElementId)
+                {
+                    results.Add($"Warning: No titleblock available for elevation {elevation.Id}");
+                    return null;
+                }
+
+                var sheet = ViewSheet.Create(doc, titleblockTypeId);
+                XYZ pos = new XYZ(0.5, 0.5, 0);
+
+                try
+                {
+                    if (Viewport.CanAddViewToSheet(doc, sheet.Id, elevation.Id))
+                    {
+                        Viewport.Create(doc, sheet.Id, elevation.Id, pos);
+                    }
+                    else
+                    {
+                        results.Add($"Warning: Could not place elevation {elevation.Id} on sheet {sheet.Id}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    results.Add($"Failed to place elevation {elevation.Id} on sheet: {ex.Message}");
+                }
+
+                // Create meaningful sheet number and name
+                string wallTypeName = GetWallTypeName(wall);
+                string elevationNumber = elevation.Name.Split('_').LastOrDefault() ?? (sequenceCounter - 1).ToString();
+                string sheetNumber = $"DEAXO_IE_{baseName}_{elevationNumber}";
+                string sheetName = $"Internal Building Elevation - {baseName}_{elevationNumber} ({wallTypeName}) - DEAXO GmbH";
+
+                SetUniqueSheetName(sheet, sheetNumber, sheetName);
+                return sheet;
+            }
+            catch (Exception ex)
+            {
+                results.Add($"Failed to create sheet for elevation {elevation.Id}: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Creates a combined sheet with all internal elevations arranged in a grid
+        /// </summary>
+        private ViewSheet CreateCombinedSheetForElevations(Document doc, List<(ViewSection elevation, Wall wall, bool templateApplied)> createdElevations, string baseName)
+        {
+            try
+            {
+                // Get titleblock type
+                ElementId titleblockTypeId = GetTitleblockTypeId(doc);
+                if (titleblockTypeId == null || titleblockTypeId == ElementId.InvalidElementId)
+                {
+                    System.Diagnostics.Debug.WriteLine("Warning: No titleblock available for combined sheet creation");
+                    return null;
+                }
+
+                // Create sheet
+                var sheet = ViewSheet.Create(doc, titleblockTypeId);
+                if (sheet == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("Failed to create combined sheet");
+                    return null;
+                }
+
+                // Calculate grid layout for elevations
+                int elevationCount = createdElevations.Count;
+                int columns = Math.Min(4, (int)Math.Ceiling(Math.Sqrt(elevationCount))); // Max 4 columns
+                int rows = (int)Math.Ceiling((double)elevationCount / columns);
+
+                double marginX = 0.1; // 10% margin from edges
+                double marginY = 0.1;
+                double spacingX = 0.05; // 5% spacing between views
+                double spacingY = 0.05;
+
+                double availableWidth = 1.0 - (2 * marginX) - ((columns - 1) * spacingX);
+                double availableHeight = 1.0 - (2 * marginY) - ((rows - 1) * spacingY);
+
+                double cellWidth = availableWidth / columns;
+                double cellHeight = availableHeight / rows;
+
+                // Place elevations on combined sheet in grid pattern
+                int placedViews = 0;
+                for (int row = 0; row < rows && placedViews < elevationCount; row++)
+                {
+                    for (int col = 0; col < columns && placedViews < elevationCount; col++)
+                    {
+                        var elevationTuple = createdElevations[placedViews];
+                        var elevation = elevationTuple.elevation;
+                        var wall = elevationTuple.wall;
+                        var templateApplied = elevationTuple.templateApplied;
+
+                        try
+                        {
+                            if (Viewport.CanAddViewToSheet(doc, sheet.Id, elevation.Id))
+                            {
+                                // Calculate position in grid
+                                XYZ position = new XYZ(
+                                    marginX + col * (cellWidth + spacingX) + cellWidth / 2,
+                                    marginY + (rows - 1 - row) * (cellHeight + spacingY) + cellHeight / 2, // Flip Y to start from top
+                                    0);
+
+                                var viewport = Viewport.Create(doc, sheet.Id, elevation.Id, position);
+                                placedViews++;
+                                System.Diagnostics.Debug.WriteLine($"Successfully placed elevation {elevation.Name} on combined sheet at grid position ({col}, {row})");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Cannot add elevation {elevation.Id} to combined sheet {sheet.Id}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to place elevation {elevation.Id} on combined sheet: {ex.Message}");
+                        }
+                    }
+                }
+
+                // Set sheet number and name
+                string sheetNumber = $"DEAXO_IE_Combined_{baseName}_{DateTime.Now.Ticks % 1000000}";
+                string sheetName = $"Internal Building Elevations - Combined ({baseName}) - DEAXO GmbH";
+
+                SetUniqueSheetName(sheet, sheetNumber, sheetName);
+
+                System.Diagnostics.Debug.WriteLine($"Created combined sheet with {placedViews} elevations placed in {columns}x{rows} grid");
+                return sheet;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating combined sheet for elevations: {ex.Message}");
+                return null;
+            }
+        }
+
+        private ElementId GetTitleblockTypeId(Document doc)
+        {
+            var titleblockTypeId = doc.GetDefaultFamilyTypeId(new ElementId(BuiltInCategory.OST_TitleBlocks));
+            if (titleblockTypeId != null && titleblockTypeId != ElementId.InvalidElementId)
+                return titleblockTypeId;
+
+            var tb = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilySymbol))
+                .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                .Cast<FamilySymbol>()
+                .FirstOrDefault();
+
+            return tb?.Id;
+        }
+
+        private void SetUniqueSheetName(ViewSheet sheet, string baseNumber, string baseName)
+        {
+            string sheetNumber = baseNumber;
+            string sheetName = baseName;
+
+            for (int i = 0; i < 10; i++)
+            {
+                try
+                {
+                    sheet.SheetNumber = sheetNumber;
+                    sheet.Name = sheetName;
+                    break;
+                }
+                catch
+                {
+                    sheetNumber = baseNumber + (i == 0 ? "*" : $"*{i}");
+                    if (sheetName.Length > 200) // Revit sheet name limit
+                    {
+                        sheetName = baseName.Substring(0, 190) + $"...({i + 1})";
+                    }
+                    else
+                    {
+                        sheetName = baseName + (i == 0 ? " (2)" : $" ({i + 2})");
+                    }
+                }
+            }
+        }
+
+        #endregion
     }
 }
